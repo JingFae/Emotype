@@ -1,53 +1,64 @@
-# Emotype 部署说明
+# EmoMirror Deployment
 
-本项目现在按一个 FastAPI Web Service 部署：
+EmoMirror is served as one Dockerized FastAPI web service:
 
-- `/` 提供 EmoType Studio 网页
-- `/predict` 提供音频情绪识别和排版生成 API
-- `/healthz` 提供部署健康检查
+- `/` serves the EmoMirror web app.
+- `/analyze-text` returns text-based emotion mirror feedback for journaling.
+- `/predict` keeps the existing audio emotion API.
+- `/healthz` is used for deployment health checks.
 
-## 本地运行
+## Local Run
 
 ```powershell
 pip install -r requirements.txt
 uvicorn emotion_rec.app:app --host 0.0.0.0 --port 8000
 ```
 
-打开：
+Open:
 
 ```text
 http://localhost:8000/
 ```
 
-## Render 部署
+## Render Blueprint
 
-仓库根目录已提供 `render.yaml`，可以通过 Render Blueprint 创建公网服务。
+`render.yaml` is configured for one public Docker web service named `emomirror`.
 
-1. 提交并推送代码到 GitHub：
+1. Commit and push:
 
 ```powershell
-git add .gitignore AGENTS.md DEPLOYMENT.md render.yaml emotion_rec/app.py emotion_rec/static requirements.txt
-git commit -m "Add EmoType web studio and Render deployment"
+git add .gitignore .dockerignore AGENTS.md DEPLOYMENT.md Dockerfile render.yaml requirements-web.txt emotion_rec/app.py emotion_rec/__init__.py emotion_rec/static requirements.txt
+git commit -m "Build EmoMirror journal interface"
 git push origin main
 ```
 
-2. 打开 Render Blueprint：
+2. Open the Blueprint:
 
 ```text
 https://dashboard.render.com/blueprint/new?repo=https://github.com/JingFae/Emotype
 ```
 
-3. 在 Render 页面填写 secret 环境变量：
+3. Set this secret in Render:
 
 ```text
 LLM_API_KEY
 ```
 
-如果暂时不填写，后端会使用本地 fallback 生成基础排版效果。
+If `LLM_API_KEY` is empty, EmoMirror still runs with local fallback emotion labels and typography styles.
 
-## 模型和资源注意事项
+## Docker Run
 
-- `Wav2vec-2.0/model.safetensors` 很大，并通过 Git LFS 管理。部署前确认 GitHub 上是真实 LFS 对象，不是损坏的指针文件。
-- Torch + Wav2Vec2 模型内存占用较高。Render Free 实例可能不足以稳定承载模型推理；如果启动失败或 OOM，升级到更高内存实例。
-- Render Native Runtime 已包含 `ffmpeg`，浏览器录音产生的 WebM 音频可以由当前 `pydub` 转换流程处理。
+Use Docker when you want the same environment locally and in production:
 
+```powershell
+docker build -t emomirror .
+docker run --rm -p 8000:8000 -e LLM_API_KEY="$env:LLM_API_KEY" emomirror
+```
+
+The Docker image installs CPU-only PyTorch wheels plus system audio dependencies such as `ffmpeg`.
+
+## Notes
+
+- `Wav2vec-2.0/model.safetensors` is large and should stay on Git LFS.
+- Torch plus Wav2Vec2 may need more memory than a free instance can provide. If `/healthz` shows `model_loaded: false`, inspect deploy logs first; if logs show OOM or killed workers, upgrade the instance.
+- Browser speech-to-text uses the user's browser SpeechRecognition support and does not require server-side audio transcription.

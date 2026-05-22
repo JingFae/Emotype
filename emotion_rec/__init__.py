@@ -1,0 +1,2 @@
+"""EmoType FastAPI package."""
+

@@ -35,8 +35,13 @@ typography design map for frontend rendering.
   - Sample audio files for manual testing.
 - `requirements.txt`
   - Python dependencies.
+- `requirements-web.txt`
+  - Runtime dependencies used by the Docker deployment after CPU PyTorch is
+    installed separately.
 - `render.yaml`
   - Render Blueprint for one public web service.
+- `Dockerfile`
+  - Reproducible production container for the FastAPI app, model, and static UI.
 - `DEPLOYMENT.md`
   - Human-facing local run and Render deployment notes.
 

@@ -3,91 +3,142 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>EmoType Studio</title>
+    <title>EmoMirror</title>
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
   <body>
-    <main class="shell">
-      <section class="workspace" aria-label="EmoType workspace">
-        <aside class="control-panel">
-          <header class="brand-row">
+    <main class="app-shell">
+      <header class="topbar">
+        <div class="brand-mark" aria-label="EmoMirror">
+          <span class="brand-symbol" aria-hidden="true"></span>
+          <div>
+            <strong>EmoMirror</strong>
+            <span>emotion journal</span>
+          </div>
+        </div>
+
+        <nav class="view-tabs" aria-label="Primary">
+          <button class="tab-button is-active" type="button" data-view-target="homeView">Home</button>
+          <button class="tab-button" type="button" data-view-target="journalView">Journal</button>
+        </nav>
+
+        <label class="privacy-toggle">
+          <input id="privacyMode" type="checkbox" checked />
+          <span>Local mode</span>
+        </label>
+      </header>
+
+      <section class="view is-active" id="homeView" aria-labelledby="homeTitle">
+        <div class="home-hero">
+          <div class="hero-copy">
+            <p class="eyebrow">Today&apos;s mirror</p>
+            <h1 id="homeTitle">A softer way to notice what you feel.</h1>
+            <p class="support-text">
+              Write or speak. EmoMirror turns subtle emotional signals into living type, then helps you name them in your own words.
+            </p>
+            <button class="primary-button" type="button" data-view-target="journalView">
+              Start today&apos;s entry
+            </button>
+          </div>
+
+          <div class="mirror-surface" aria-label="Emotion mirror preview">
+            <div class="mirror-lines" aria-hidden="true"></div>
+            <div class="mirror-word" id="homeMirrorWord">steady</div>
+            <div class="mirror-caption" id="homeMirrorCaption">No entry yet today</div>
+          </div>
+        </div>
+
+        <div class="home-grid">
+          <article class="stat-card">
+            <span>Entries</span>
+            <strong id="entryCount">0</strong>
+            <small>saved locally</small>
+          </article>
+          <article class="stat-card">
+            <span>Latest label</span>
+            <strong id="latestEmotion">Unclear</strong>
+            <small id="latestConfidence">waiting for text</small>
+          </article>
+          <article class="stat-card">
+            <span>Mirror intensity</span>
+            <strong id="homeIntensity">80%</strong>
+            <small>adjustable in journal</small>
+          </article>
+        </div>
+
+        <section class="home-band" aria-labelledby="recentTitle">
+          <div class="section-head">
             <div>
-              <p class="eyebrow">EmoType</p>
-              <h1>Voice to kinetic type</h1>
+              <p class="eyebrow">Recent reflections</p>
+              <h2 id="recentTitle">Your last entries</h2>
             </div>
-            <span class="status-pill" id="serviceStatus">Ready</span>
-          </header>
-
-          <div class="field-group">
-            <label for="transcript">Transcript</label>
-            <textarea
-              id="transcript"
-              spellcheck="false"
-              rows="7"
-            >Oh my god, I just WON the big LOTTERY!</textarea>
+            <button class="ghost-button" type="button" id="clearEntries">Clear local entries</button>
           </div>
-
-          <div class="field-group">
-            <label for="audioFile">Audio</label>
-            <div class="drop-zone" id="dropZone">
-              <input id="audioFile" type="file" accept="audio/*" />
-              <button class="ghost-button" id="chooseFile" type="button">
-                <span class="button-icon upload-icon" aria-hidden="true"></span>
-                Choose file
-              </button>
-              <span id="fileName" class="muted-text">No file selected</span>
-            </div>
-          </div>
-
-          <div class="recorder-strip">
-            <canvas id="waveCanvas" width="900" height="160" aria-hidden="true"></canvas>
-            <div class="action-row">
-              <button class="ghost-button" id="recordBtn" type="button">
-                <span class="button-icon record-icon" aria-hidden="true"></span>
-                Record
-              </button>
-              <button class="primary-button" id="analyzeBtn" type="button">
-                <span class="button-icon analyze-icon" aria-hidden="true"></span>
-                Analyze
-              </button>
-            </div>
-          </div>
-        </aside>
-
-        <section class="stage-panel">
-          <div class="stage-head">
-            <div>
-              <p class="eyebrow">Live stage</p>
-              <h2 id="stageTitle">Typography render</h2>
-            </div>
-            <span class="status-text" id="requestStatus">Idle</span>
-          </div>
-
-          <div class="type-stage" id="typeStage" aria-live="polite"></div>
-
-          <div class="metrics-grid" aria-label="Emotion and acoustic metrics">
-            <div class="metric">
-              <span>Valence</span>
-              <strong id="valenceValue">0.00</strong>
-              <div class="meter"><i id="valenceMeter"></i></div>
-            </div>
-            <div class="metric">
-              <span>Arousal</span>
-              <strong id="arousalValue">0.00</strong>
-              <div class="meter"><i id="arousalMeter"></i></div>
-            </div>
-            <div class="metric">
-              <span>Dominance</span>
-              <strong id="dominanceValue">0.00</strong>
-              <div class="meter"><i id="dominanceMeter"></i></div>
-            </div>
-            <div class="metric">
-              <span>Energy</span>
-              <strong id="energyValue">0.00</strong>
-              <div class="meter"><i id="energyMeter"></i></div>
-            </div>
-          </div>
+          <div class="entry-list" id="entryList"></div>
         </section>
+      </section>
+
+      <section class="view" id="journalView" aria-labelledby="journalTitle">
+        <div class="journal-layout">
+          <section class="editor-pane">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">Expressive writing</p>
+                <h2 id="journalTitle">Today&apos;s entry</h2>
+              </div>
+              <span class="status-pill" id="analysisStatus">Ready</span>
+            </div>
+
+            <div class="input-mode-row" role="group" aria-label="Input mode">
+              <button class="mode-button is-active" type="button" id="typingMode">Type</button>
+              <button class="mode-button" type="button" id="voiceMode">Voice to text</button>
+            </div>
+
+            <textarea
+              id="journalText"
+              spellcheck="true"
+              placeholder="Write what happened. You can be specific, vague, contradictory, or unsure."
+            >Today I kept saying it was fine, but my chest felt tight after the meeting.</textarea>
+
+            <div class="editor-tools">
+              <label class="slider-control" for="intensityRange">
+                <span>Feedback intensity</span>
+                <input id="intensityRange" type="range" min="0" max="100" value="80" />
+              </label>
+              <button class="ghost-button" type="button" id="voiceButton">Start voice</button>
+              <button class="primary-button" type="button" id="saveEntry">Save entry</button>
+            </div>
+          </section>
+
+          <section class="mirror-pane" aria-labelledby="mirrorTitle">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">Kinetic affective type</p>
+                <h2 id="mirrorTitle">Live mirror</h2>
+              </div>
+              <span class="emotion-dot" id="emotionDot" aria-hidden="true"></span>
+            </div>
+
+            <div class="type-stage" id="typeStage" aria-live="polite"></div>
+
+            <div class="emotion-panel">
+              <div>
+                <span class="panel-label">Detected direction</span>
+                <strong id="primaryEmotion">Unclear / gently mixed</strong>
+                <p id="reflectionText">
+                  The mirror will suggest a direction as you write. You can rename it anytime.
+                </p>
+              </div>
+              <div class="confidence-meter" aria-label="Confidence">
+                <i id="confidenceMeter"></i>
+              </div>
+            </div>
+
+            <div class="chip-row" id="emotionChips" aria-label="Manual emotion labels"></div>
+
+            <div class="prompt-row" id="promptRow"></div>
+          </section>
+        </div>
       </section>
     </main>
 

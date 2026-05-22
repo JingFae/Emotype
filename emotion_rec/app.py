@@ -11,6 +11,7 @@ from fastapi import FastAPI, UploadFile, File, Form, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
 from transformers import Wav2Vec2Processor
 from transformers.models.wav2vec2.modeling_wav2vec2 import (
     Wav2Vec2Model,
@@ -65,7 +66,7 @@ class EmotionModel(Wav2Vec2PreTrainedModel):
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 
-app = FastAPI(title="EmoType Studio API")
+app = FastAPI(title="EmoMirror API")
 
 app.add_middleware(
     CORSMiddleware,
@@ -96,6 +97,11 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 processor = None
 model = None
+
+
+class TextAnalysisRequest(BaseModel):
+    text: str = Field(default="", max_length=6000)
+    intensity: float = Field(default=0.8, ge=0.0, le=1.0)
 
 @app.on_event("startup")
 def _load():
@@ -139,28 +145,34 @@ def build_fallback_typography_design(text: str, vad: dict, acoustics: dict):
     """Generate a local design map when the remote LLM is unavailable."""
     rules = [
         {
-            "terms": {"angry", "mad", "hate", "urgent", "stop", "no"},
+            "terms": {"angry", "mad", "hate", "urgent", "stop", "no", "生气", "愤怒", "讨厌", "烦", "委屈"},
             "style": {"weight": 900, "scale": 1.75, "color": "#dc2626", "animation": "shake-hard"},
             "emoji": "ANGRY",
             "targets": "ao",
         },
         {
-            "terms": {"happy", "haha", "fun", "joy", "amazing", "wow", "cool", "won", "lottery"},
+            "terms": {"happy", "haha", "fun", "joy", "amazing", "wow", "cool", "won", "lottery", "开心", "高兴", "期待", "轻松", "喜欢"},
             "style": {"weight": 850, "scale": 1.65, "color": "#f59e0b", "animation": "pulse-scale"},
             "emoji": "HAPPY",
             "targets": "ao",
         },
         {
-            "terms": {"sad", "cry", "lonely", "tired", "left"},
+            "terms": {"sad", "cry", "lonely", "tired", "left", "难过", "失落", "孤独", "疲惫", "累", "想哭"},
             "style": {"weight": 350, "scale": 1.45, "color": "#475569", "animation": "sad-droop"},
             "emoji": "SAD",
             "targets": "aeo",
         },
         {
-            "terms": {"love", "heart", "like"},
+            "terms": {"love", "heart", "like", "爱", "温暖", "被理解"},
             "style": {"weight": 800, "scale": 1.6, "color": "#ec4899", "animation": "float-drift"},
             "emoji": "LOVE",
             "targets": "ov",
+        },
+        {
+            "terms": {"anxious", "worry", "afraid", "fear", "焦虑", "担心", "紧张", "害怕", "不安"},
+            "style": {"weight": 720, "scale": 1.55, "color": "#5E5094", "animation": "shake-hard"},
+            "emoji": "THINK",
+            "targets": "io",
         },
         {
             "terms": {"fire", "hot", "lit"},
@@ -183,6 +195,22 @@ def build_fallback_typography_design(text: str, vad: dict, acoustics: dict):
     ]
 
     matches = []
+    lower_text = text.lower()
+    seen_ranges = set()
+    for rule in rules:
+        for term in sorted(rule["terms"], key=len, reverse=True):
+            term_lower = term.lower()
+            search_start = 0
+            while True:
+                idx = lower_text.find(term_lower, search_start)
+                if idx == -1:
+                    break
+                span_key = (idx, idx + len(term))
+                if span_key not in seen_ranges:
+                    matches.append((idx, text[idx:idx + len(term)], rule))
+                    seen_ranges.add(span_key)
+                search_start = idx + len(term)
+
     for match in re.finditer(r"[A-Za-z']+", text):
         word = match.group(0)
         lower_word = word.lower().strip("'")
@@ -191,11 +219,12 @@ def build_fallback_typography_design(text: str, vad: dict, acoustics: dict):
             if lower_word in rule["terms"]:
                 chosen_rule = rule
                 break
-        if chosen_rule:
+        if chosen_rule and (match.start(), match.end()) not in seen_ranges:
             matches.append((match.start(), word, chosen_rule))
+            seen_ranges.add((match.start(), match.end()))
 
     if not matches:
-        words = list(re.finditer(r"[A-Za-z']+", text))
+        words = list(re.finditer(r"[A-Za-z']+|[\u4e00-\u9fff]{1,4}", text))
         if not words:
             return {}
         words.sort(key=lambda item: len(item.group(0)), reverse=True)
@@ -210,7 +239,8 @@ def build_fallback_typography_design(text: str, vad: dict, acoustics: dict):
             style = {"weight": 760, "scale": 1.3 + energy * 0.45, "color": "#0f766e", "animation": "float-drift"}
         matches.append((words[0].start(), words[0].group(0), {"style": style, "emoji": None, "targets": ""}))
 
-    limit = 1 if len(text.strip().split()) <= 5 else 3
+    matches.sort(key=lambda item: item[0])
+    limit = 1 if len(re.findall(r"[A-Za-z']+|[\u4e00-\u9fff]+", text.strip())) <= 5 else 3
     final_design_map = {}
     for start, word, rule in matches[:limit]:
         emoji_applied = False
@@ -228,6 +258,118 @@ def build_fallback_typography_design(text: str, vad: dict, acoustics: dict):
             final_design_map[str(start + offset)] = char_style
 
     return final_design_map
+
+
+def infer_text_emotion(text: str):
+    lower_text = text.lower()
+    lexicon = [
+        {
+            "key": "anger",
+            "label": "Anger / grievance",
+            "terms": {"angry", "mad", "hate", "annoyed", "unfair", "生气", "愤怒", "委屈", "讨厌", "烦", "不公平"},
+            "valence": 0.24,
+            "arousal": 0.78,
+            "color": "#BF68BE",
+        },
+        {
+            "key": "anxiety",
+            "label": "Anxiety / uncertainty",
+            "terms": {"anxious", "worry", "worried", "afraid", "fear", "焦虑", "担心", "紧张", "害怕", "不安"},
+            "valence": 0.34,
+            "arousal": 0.72,
+            "color": "#5E5094",
+        },
+        {
+            "key": "sadness",
+            "label": "Sadness / loneliness",
+            "terms": {"sad", "cry", "lonely", "tired", "empty", "难过", "失落", "孤独", "疲惫", "累", "想哭"},
+            "valence": 0.22,
+            "arousal": 0.34,
+            "color": "#949DCA",
+        },
+        {
+            "key": "joy",
+            "label": "Ease / positive energy",
+            "terms": {"happy", "joy", "fun", "amazing", "calm", "开心", "高兴", "轻松", "期待", "喜欢"},
+            "valence": 0.78,
+            "arousal": 0.56,
+            "color": "#A6CFCD",
+        },
+        {
+            "key": "tenderness",
+            "label": "Warmth / connection",
+            "terms": {"love", "heart", "safe", "understood", "爱", "温暖", "安心", "被理解", "陪伴"},
+            "valence": 0.74,
+            "arousal": 0.42,
+            "color": "#E2C7D4",
+        },
+    ]
+
+    scores = []
+    for item in lexicon:
+        count = sum(lower_text.count(term.lower()) for term in item["terms"])
+        if count:
+            scores.append((count, item))
+
+    if scores:
+        scores.sort(key=lambda pair: pair[0], reverse=True)
+        primary = scores[0][1]
+        secondary = [item["label"] for _, item in scores[1:3]]
+        confidence = min(0.92, 0.48 + scores[0][0] * 0.18)
+    else:
+        primary = {
+            "key": "unclear",
+            "label": "Unclear / gently mixed",
+            "valence": 0.5,
+            "arousal": 0.42,
+            "color": "#BEAACF",
+        }
+        secondary = []
+        confidence = 0.36 if text.strip() else 0.0
+
+    vad = {
+        "arousal": float(primary["arousal"]),
+        "dominance": 0.5,
+        "valence": float(primary["valence"]),
+    }
+    acoustics = {
+        "pitch_norm": 0.5,
+        "energy_norm": float(max(0.25, min(0.92, primary["arousal"]))),
+    }
+    reflection = (
+        "The mirror is reading a possible emotional direction, not making a diagnosis. "
+        "If this feels inaccurate, rename it in your own words."
+    )
+    prompts = [
+        "What body sensation tells you this might be present?",
+        "Which word feels closer than the first label?",
+        "What would make this feeling 10% easier to carry?",
+    ]
+
+    return {
+        "primary": primary["label"],
+        "key": primary["key"],
+        "secondary": secondary,
+        "confidence": confidence,
+        "color": primary["color"],
+        "reflection": reflection,
+        "prompts": prompts,
+        "vad": vad,
+        "acoustics": acoustics,
+    }
+
+
+def apply_feedback_intensity(design: dict, intensity: float):
+    safe_intensity = max(0.0, min(1.0, float(intensity)))
+    adjusted = {}
+    for key, value in design.items():
+        char_style = dict(value)
+        if "scale" in char_style:
+            char_style["scale"] = 1 + (float(char_style["scale"]) - 1) * safe_intensity
+        if safe_intensity < 0.35:
+            char_style.pop("animation", None)
+        adjusted[key] = char_style
+    return adjusted
 
 
 def get_demo_design_happy():
@@ -674,6 +816,32 @@ def process_typography_request(text: str, vad: dict, acoustics: dict):
     print("🤖 MISS: Handing over to LLM...")
     # return call_llm_typography_design(text, vad, acoustics)
     return call_llm_typography_design_2(text, vad, acoustics)
+
+
+@app.post("/analyze-text")
+async def analyze_text(payload: TextAnalysisRequest):
+    text = payload.text.strip()
+    emotion = infer_text_emotion(text)
+    design = {}
+    if text:
+        design = process_typography_request(text, emotion["vad"], emotion["acoustics"])
+        design = apply_feedback_intensity(design, payload.intensity)
+
+    return {
+        "status": "success",
+        "emotion": {
+            "primary": emotion["primary"],
+            "key": emotion["key"],
+            "secondary": emotion["secondary"],
+            "confidence": emotion["confidence"],
+            "color": emotion["color"],
+            "reflection": emotion["reflection"],
+            "prompts": emotion["prompts"],
+        },
+        "vad": emotion["vad"],
+        "acoustics": emotion["acoustics"],
+        "llm_design": design,
+    }
 
 
 @app.post("/predict")
