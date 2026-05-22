@@ -3,11 +3,14 @@ import os
 import json
 import http.client
 import tempfile
+from pathlib import Path
 import numpy as np
 import torch
 import torch.nn as nn
 from fastapi import FastAPI, UploadFile, File, Form, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from transformers import Wav2Vec2Processor
 from transformers.models.wav2vec2.modeling_wav2vec2 import (
     Wav2Vec2Model,
@@ -20,9 +23,9 @@ from pydub import AudioSegment
 # -----------------------------
 # LLM Configuration
 # -----------------------------
-LLM_API_HOST = "api.chatanywhere.tech"
-LLM_API_KEY = "Bearer sk-1QseLXSiJenNDSyOCVAJO5dL2VxnK2ldFUAiMgAnhwkVvPMe"  # 你的 Key
-LLM_MODEL = "gpt-4o"
+LLM_API_HOST = os.getenv("LLM_API_HOST", "api.chatanywhere.tech")
+LLM_API_KEY = os.getenv("LLM_API_KEY", "")
+LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o")
 
 # -----------------------------
 # Model definition
@@ -59,7 +62,10 @@ class EmotionModel(Wav2Vec2PreTrainedModel):
 # -----------------------------
 # App Setup
 # -----------------------------
-app = FastAPI(title="Speech VAD & Acoustics API")
+BASE_DIR = Path(__file__).resolve().parent
+STATIC_DIR = BASE_DIR / "static"
+
+app = FastAPI(title="EmoType Studio API")
 
 app.add_middleware(
     CORSMiddleware,
@@ -69,11 +75,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+if STATIC_DIR.exists():
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+
+@app.get("/", include_in_schema=False)
+async def index():
+    return FileResponse(STATIC_DIR / "index.html")
+
 # -----------------------------
 # Globals
 # -----------------------------
 # 请确保路径正确指向你的本地模型
-MODEL_NAME_OR_PATH = os.getenv("MODEL_NAME_OR_PATH", r"D:\论文撰写\VibeType\Wav2vec-2.0")
+DEFAULT_MODEL_PATH = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "Wav2vec-2.0")
+)
+MODEL_NAME_OR_PATH = os.getenv("MODEL_NAME_OR_PATH", DEFAULT_MODEL_PATH)
 TARGET_SR = 16000
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -92,9 +109,125 @@ def _load():
     except Exception as e:
         print(f"Error loading model: {e}")
 
+
+@app.get("/healthz")
+def healthz():
+    return {
+        "status": "ok",
+        "device": str(device),
+        "model_loaded": processor is not None and model is not None,
+    }
+
 # -----------------------------
 # Helper Functions
 # -----------------------------
+
+
+def _llm_headers():
+    token = LLM_API_KEY.strip()
+    if not token:
+        return None
+    if not token.lower().startswith("bearer "):
+        token = f"Bearer {token}"
+    return {
+        "Authorization": token,
+        "Content-Type": "application/json",
+    }
+
+
+def build_fallback_typography_design(text: str, vad: dict, acoustics: dict):
+    """Generate a local design map when the remote LLM is unavailable."""
+    rules = [
+        {
+            "terms": {"angry", "mad", "hate", "urgent", "stop", "no"},
+            "style": {"weight": 900, "scale": 1.75, "color": "#dc2626", "animation": "shake-hard"},
+            "emoji": "ANGRY",
+            "targets": "ao",
+        },
+        {
+            "terms": {"happy", "haha", "fun", "joy", "amazing", "wow", "cool", "won", "lottery"},
+            "style": {"weight": 850, "scale": 1.65, "color": "#f59e0b", "animation": "pulse-scale"},
+            "emoji": "HAPPY",
+            "targets": "ao",
+        },
+        {
+            "terms": {"sad", "cry", "lonely", "tired", "left"},
+            "style": {"weight": 350, "scale": 1.45, "color": "#475569", "animation": "sad-droop"},
+            "emoji": "SAD",
+            "targets": "aeo",
+        },
+        {
+            "terms": {"love", "heart", "like"},
+            "style": {"weight": 800, "scale": 1.6, "color": "#ec4899", "animation": "float-drift"},
+            "emoji": "LOVE",
+            "targets": "ov",
+        },
+        {
+            "terms": {"fire", "hot", "lit"},
+            "style": {"weight": 850, "scale": 1.6, "color": "#ef4444", "animation": "pulse-scale"},
+            "emoji": "FIRE",
+            "targets": "il",
+        },
+        {
+            "terms": {"time", "late", "now"},
+            "style": {"weight": 760, "scale": 1.55, "color": "#2563eb", "animation": "float-drift"},
+            "emoji": "CLOCK",
+            "targets": "oi",
+        },
+        {
+            "terms": {"pizza", "food"},
+            "style": {"weight": 820, "scale": 1.55, "color": "#ea580c", "animation": "pulse-scale"},
+            "emoji": "PIZZA",
+            "targets": "ai",
+        },
+    ]
+
+    matches = []
+    for match in re.finditer(r"[A-Za-z']+", text):
+        word = match.group(0)
+        lower_word = word.lower().strip("'")
+        chosen_rule = None
+        for rule in rules:
+            if lower_word in rule["terms"]:
+                chosen_rule = rule
+                break
+        if chosen_rule:
+            matches.append((match.start(), word, chosen_rule))
+
+    if not matches:
+        words = list(re.finditer(r"[A-Za-z']+", text))
+        if not words:
+            return {}
+        words.sort(key=lambda item: len(item.group(0)), reverse=True)
+        valence = float(vad.get("valence", 0.5))
+        arousal = float(vad.get("arousal", 0.5))
+        energy = float(acoustics.get("energy_norm", 0.5))
+        if valence < 0.38:
+            style = {"weight": 360, "scale": 1.3 + energy * 0.4, "color": "#475569", "animation": "sad-droop"}
+        elif arousal > 0.62:
+            style = {"weight": 860, "scale": 1.35 + energy * 0.5, "color": "#dc2626", "animation": "shake-hard"}
+        else:
+            style = {"weight": 760, "scale": 1.3 + energy * 0.45, "color": "#0f766e", "animation": "float-drift"}
+        matches.append((words[0].start(), words[0].group(0), {"style": style, "emoji": None, "targets": ""}))
+
+    limit = 1 if len(text.strip().split()) <= 5 else 3
+    final_design_map = {}
+    for start, word, rule in matches[:limit]:
+        emoji_applied = False
+        for offset, char in enumerate(word):
+            if not char.strip():
+                continue
+            char_style = dict(rule["style"])
+            if (
+                rule.get("emoji")
+                and not emoji_applied
+                and char.lower() in rule.get("targets", "")
+            ):
+                char_style["emoji"] = rule["emoji"]
+                emoji_applied = True
+            final_design_map[str(start + offset)] = char_style
+
+    return final_design_map
 
 
 def get_demo_design_happy():
@@ -284,6 +417,10 @@ def call_llm_typography_design(text: str, vad: dict, acoustics: dict):
     """
 
     try:
+        headers = _llm_headers()
+        if not headers:
+            return build_fallback_typography_design(text, vad, acoustics)
+
         conn = http.client.HTTPSConnection(LLM_API_HOST)
         payload = json.dumps({
             "model": LLM_MODEL,
@@ -295,10 +432,6 @@ def call_llm_typography_design(text: str, vad: dict, acoustics: dict):
             "temperature": 0.75, 
             "response_format": { "type": "json_object" }
         })
-        headers = {
-            'Authorization': LLM_API_KEY,
-            'Content-Type': 'application/json'
-        }
         conn.request("POST", "/v1/chat/completions", payload, headers)
         res = conn.getresponse()
         data = res.read()
@@ -318,7 +451,7 @@ def call_llm_typography_design(text: str, vad: dict, acoustics: dict):
         
     except Exception as e:
         print(f"LLM Call Failed: {e}")
-        return {}
+        return build_fallback_typography_design(text, vad, acoustics)
 
 
 import json
@@ -388,6 +521,10 @@ def call_llm_typography_design_2(text: str, vad: dict, acoustics: dict):
     """
 
     try:
+        headers = _llm_headers()
+        if not headers:
+            return build_fallback_typography_design(text, vad, acoustics)
+
         conn = http.client.HTTPSConnection(LLM_API_HOST)
         payload = json.dumps({
             "model": LLM_MODEL,
@@ -398,10 +535,6 @@ def call_llm_typography_design_2(text: str, vad: dict, acoustics: dict):
             "temperature": 0.5, 
             "response_format": { "type": "json_object" }
         })
-        headers = {
-            'Authorization': LLM_API_KEY,
-            'Content-Type': 'application/json'
-        }
         conn.request("POST", "/v1/chat/completions", payload, headers)
         res = conn.getresponse()
         data = res.read()
@@ -462,7 +595,7 @@ def call_llm_typography_design_2(text: str, vad: dict, acoustics: dict):
         
     except Exception as e:
         print(f"LLM Call Failed: {e}")
-        return {}
+        return build_fallback_typography_design(text, vad, acoustics)
 
 def convert_webm_to_wav(webm_path: str) -> str:
     try:
@@ -557,6 +690,9 @@ async def predict(
 
         # 1. 音频处理
         wav_arr, wav_path = _read_audio_to_mono_16k(raw)
+
+        if processor is None or model is None:
+            raise HTTPException(status_code=503, detail="Emotion model is not loaded")
         
         # 2. VAD 推理 (Valence / Arousal / Dominance)
         inputs = processor(wav_arr[None, :], sampling_rate=TARGET_SR, return_tensors="pt")

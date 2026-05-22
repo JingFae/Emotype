@@ -17,9 +17,11 @@ uvicorn[standard]>=0.24.0
 # Audio Processing
 librosa>=0.10.0
 soundfile>=0.12.0
+pydub>=0.25.1
 
 # Numerical Computing
 numpy>=1.24.0
+typing_extensions>=4.12.0
 
 # Optional: For visualization and monitoring
 matplotlib>=3.8.0

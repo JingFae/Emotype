@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>EmoType Studio</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="workspace" aria-label="EmoType workspace">
+        <aside class="control-panel">
+          <header class="brand-row">
+            <div>
+              <p class="eyebrow">EmoType</p>
+              <h1>Voice to kinetic type</h1>
+            </div>
+            <span class="status-pill" id="serviceStatus">Ready</span>
+          </header>
+
+          <div class="field-group">
+            <label for="transcript">Transcript</label>
+            <textarea
+              id="transcript"
+              spellcheck="false"
+              rows="7"
+            >Oh my god, I just WON the big LOTTERY!</textarea>
+          </div>
+
+          <div class="field-group">
+            <label for="audioFile">Audio</label>
+            <div class="drop-zone" id="dropZone">
+              <input id="audioFile" type="file" accept="audio/*" />
+              <button class="ghost-button" id="chooseFile" type="button">
+                <span class="button-icon upload-icon" aria-hidden="true"></span>
+                Choose file
+              </button>
+              <span id="fileName" class="muted-text">No file selected</span>
+            </div>
+          </div>
+
+          <div class="recorder-strip">
+            <canvas id="waveCanvas" width="900" height="160" aria-hidden="true"></canvas>
+            <div class="action-row">
+              <button class="ghost-button" id="recordBtn" type="button">
+                <span class="button-icon record-icon" aria-hidden="true"></span>
+                Record
+              </button>
+              <button class="primary-button" id="analyzeBtn" type="button">
+                <span class="button-icon analyze-icon" aria-hidden="true"></span>
+                Analyze
+              </button>
+            </div>
+          </div>
+        </aside>
+
+        <section class="stage-panel">
+          <div class="stage-head">
+            <div>
+              <p class="eyebrow">Live stage</p>
+              <h2 id="stageTitle">Typography render</h2>
+            </div>
+            <span class="status-text" id="requestStatus">Idle</span>
+          </div>
+
+          <div class="type-stage" id="typeStage" aria-live="polite"></div>
+
+          <div class="metrics-grid" aria-label="Emotion and acoustic metrics">
+            <div class="metric">
+              <span>Valence</span>
+              <strong id="valenceValue">0.00</strong>
+              <div class="meter"><i id="valenceMeter"></i></div>
+            </div>
+            <div class="metric">
+              <span>Arousal</span>
+              <strong id="arousalValue">0.00</strong>
+              <div class="meter"><i id="arousalMeter"></i></div>
+            </div>
+            <div class="metric">
+              <span>Dominance</span>
+              <strong id="dominanceValue">0.00</strong>
+              <div class="meter"><i id="dominanceMeter"></i></div>
+            </div>
+            <div class="metric">
+              <span>Energy</span>
+              <strong id="energyValue">0.00</strong>
+              <div class="meter"><i id="energyMeter"></i></div>
+            </div>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <script src="/static/app.js" defer></script>
+  </body>
+</html>
