@@ -32,59 +32,15 @@ const palette = {
   mint: "#A6CFCD",
   blueMist: "#949DCA",
   mauve: "#BEAACF",
-  rose: "#E2C7D4",
 };
 
 const labelOptions = [
-  "Unclear / mixed",
-  "Anxiety / uncertainty",
-  "Anger / grievance",
-  "Sadness / loneliness",
-  "Ease / positive energy",
-  "Warmth / connection",
-];
-
-const emotionRules = [
-  {
-    label: "Anger / grievance",
-    key: "anger",
-    terms: ["angry", "mad", "hate", "unfair", "annoyed", "生气", "愤怒", "委屈", "烦", "不公平"],
-    color: palette.orchid,
-    style: { weight: 900, scale: 1.7, color: palette.orchid, animation: "shake-hard" },
-    vad: { valence: 0.24, arousal: 0.78, dominance: 0.56 },
-  },
-  {
-    label: "Anxiety / uncertainty",
-    key: "anxiety",
-    terms: ["anxious", "worry", "afraid", "tight", "nervous", "焦虑", "担心", "紧张", "害怕", "不安"],
-    color: palette.plum,
-    style: { weight: 780, scale: 1.55, color: palette.plum, animation: "shake-hard" },
-    vad: { valence: 0.34, arousal: 0.72, dominance: 0.42 },
-  },
-  {
-    label: "Sadness / loneliness",
-    key: "sadness",
-    terms: ["sad", "cry", "lonely", "tired", "empty", "难过", "失落", "孤独", "疲惫", "累"],
-    color: palette.blueMist,
-    style: { weight: 360, scale: 1.42, color: palette.blueMist, animation: "sad-droop" },
-    vad: { valence: 0.22, arousal: 0.34, dominance: 0.38 },
-  },
-  {
-    label: "Ease / positive energy",
-    key: "joy",
-    terms: ["happy", "joy", "calm", "proud", "relieved", "开心", "高兴", "轻松", "期待", "喜欢"],
-    color: palette.mint,
-    style: { weight: 820, scale: 1.55, color: "#3d8f8b", animation: "pulse-scale" },
-    vad: { valence: 0.78, arousal: 0.56, dominance: 0.62 },
-  },
-  {
-    label: "Warmth / connection",
-    key: "warmth",
-    terms: ["love", "safe", "warm", "understood", "爱", "温暖", "安心", "被理解", "陪伴"],
-    color: palette.rose,
-    style: { weight: 760, scale: 1.48, color: "#b45f9f", animation: "float-drift" },
-    vad: { valence: 0.74, arousal: 0.42, dominance: 0.58 },
-  },
+  "中性",
+  "复杂情绪",
+  "消极高能量",
+  "积极高能量",
+  "消极低能量",
+  "积极低能量",
 ];
 
 let entries = JSON.parse(localStorage.getItem("emomirror.entries") || "[]");
@@ -92,6 +48,10 @@ let selectedLabel = "";
 let analyzeTimer = null;
 let recognition = null;
 let isListening = false;
+
+function vaMapper() {
+  return window.VAMapper;
+}
 
 function switchView(targetId) {
   views.forEach((view) => view.classList.toggle("is-active", view.id === targetId));
@@ -128,6 +88,35 @@ function applyIntensity(style = {}) {
   return next;
 }
 
+function hexToRgba(hex, alpha) {
+  const clean = String(hex || "").replace("#", "");
+  if (clean.length !== 6) return `rgba(148, 163, 184, ${alpha})`;
+  const r = Number.parseInt(clean.slice(0, 2), 16);
+  const g = Number.parseInt(clean.slice(2, 4), 16);
+  const b = Number.parseInt(clean.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+function styleForMapping(mapping = {}) {
+  const color = mapping.color || vaMapper().NEUTRAL_COLOR;
+  const styles = {
+    high_negative: { weight: 900, scale: 1.72, color, backgroundColor: color, animation: "shake-hard" },
+    high_positive: { weight: 850, scale: 1.62, color, backgroundColor: color, animation: "pulse-scale" },
+    low_negative: { weight: 420, scale: 1.38, color, backgroundColor: color, animation: "sad-droop" },
+    low_positive: { weight: 720, scale: 1.42, color, backgroundColor: color, animation: "float-drift" },
+    neutral: { weight: 560, scale: 1.16, color, backgroundColor: color, animation: "float-drift" },
+  };
+  return styles[mapping.quadrant] || styles.neutral;
+}
+
+function addStyleRange(design, start, length, style, onlyIfEmpty = false) {
+  for (let offset = 0; offset < length; offset += 1) {
+    const key = String(start + offset);
+    if (onlyIfEmpty && design[key]) continue;
+    design[key] = { ...(design[key] || {}), ...style };
+  }
+}
+
 function renderTypography(text, design = {}) {
   typeStage.textContent = "";
   const fragment = document.createDocumentFragment();
@@ -141,97 +130,174 @@ function renderTypography(text, design = {}) {
     span.style.setProperty("--scale", scale);
     span.style.setProperty("--glyph-weight", style.weight || 560);
     span.style.setProperty("--glyph-color", style.color || "var(--ink)");
+    if (style.backgroundColor) {
+      span.style.backgroundColor = hexToRgba(style.backgroundColor, 0.14);
+      span.style.borderRadius = "0.28em";
+    }
     fragment.appendChild(span);
   });
 
   typeStage.appendChild(fragment);
 }
 
-function localEmotion(text) {
-  const lower = text.toLowerCase();
-  const scores = emotionRules
-    .map((rule) => ({
-      rule,
-      score: rule.terms.reduce((sum, term) => sum + (lower.includes(term.toLowerCase()) ? 1 : 0), 0),
-    }))
-    .filter((item) => item.score > 0)
-    .sort((a, b) => b.score - a.score);
-
-  if (!scores.length) {
-    return {
-      primary: "Unclear / gently mixed",
-      key: "unclear",
-      confidence: text.trim() ? 0.36 : 0.12,
-      color: palette.mauve,
-      vad: { valence: 0.5, arousal: 0.42, dominance: 0.5 },
-      reflection: "The mirror is still listening for a clearer emotional shape.",
-      prompts: [
-        "What word feels almost right?",
-        "Where do you notice it in your body?",
-        "What changed before this feeling appeared?",
-      ],
-    };
-  }
-
-  const rule = scores[0].rule;
+function averageMatches(matches) {
+  const weight = 1 / matches.length;
   return {
-    primary: rule.label,
-    key: rule.key,
-    confidence: Math.min(0.92, 0.48 + scores[0].score * 0.18),
-    color: rule.color,
-    vad: rule.vad,
-    reflection: "This is a possible reading. If it feels off, choose a label that fits your lived experience better.",
-    prompts: [
-      "What makes this label feel true or untrue?",
-      "Is there a smaller, more specific feeling underneath?",
-      "What would you tell a friend feeling this?",
-    ],
+    valence: matches.reduce((sum, item) => sum + item.valence * weight, 0),
+    arousal: matches.reduce((sum, item) => sum + item.arousal * weight, 0),
+    confidence: Math.min(0.92, 0.44 + 0.12 * matches.length),
   };
 }
 
-function localDesign(text) {
-  const design = {};
-  const lower = text.toLowerCase();
-  let styled = 0;
+function inferSegmentVA(segmentText) {
+  const lower = segmentText.toLowerCase();
+  const lexiconMatches = vaMapper()
+    .getEmotionLexicon()
+    .filter((item) => item.label && segmentText.includes(item.label));
 
-  for (const rule of emotionRules) {
-    for (const term of rule.terms.sort((a, b) => b.length - a.length)) {
-      const index = lower.indexOf(term.toLowerCase());
-      if (index === -1 || styled >= 4) continue;
-      for (let offset = 0; offset < term.length; offset += 1) {
-        design[String(index + offset)] = rule.style;
-      }
-      styled += 1;
-    }
+  if (lexiconMatches.length) return averageMatches(lexiconMatches);
+
+  const englishHints = [
+    { terms: ["angry", "mad", "hate", "anxious", "worry", "afraid", "tense", "tight"], valence: -0.5, arousal: 0.6 },
+    { terms: ["happy", "excited", "joy", "proud", "hopeful", "active", "amazing"], valence: 0.55, arousal: 0.55 },
+    { terms: ["sad", "lonely", "tired", "empty", "depressed", "bored", "low"], valence: -0.55, arousal: -0.55 },
+    { terms: ["calm", "safe", "relaxed", "peaceful", "comfortable", "love"], valence: 0.55, arousal: -0.55 },
+  ];
+
+  const hit = englishHints.find((hint) => hint.terms.some((term) => lower.includes(term)));
+  if (hit) {
+    return { valence: hit.valence, arousal: hit.arousal, confidence: 0.56 };
   }
 
-  if (!styled) {
+  return { valence: 0, arousal: 0, confidence: segmentText.trim() ? 0.2 : 0 };
+}
+
+function localVAMapping(text) {
+  const segmentInputs = vaMapper()
+    .splitTextSegments(text)
+    .map((segment) => ({
+      text: segment,
+      ...inferSegmentVA(segment),
+    }));
+
+  return vaMapper().mapSegments(segmentInputs);
+}
+
+function reflectionFor(mapping) {
+  const reflections = {
+    high_negative: "镜面读到一种高能量的紧绷感。它可能接近愤怒、焦虑或不安，也可能只是身体在提醒你需要边界。",
+    high_positive: "镜面读到一种明亮、上扬的能量。它可能接近兴奋、开心、期待或被激活的专注。",
+    low_negative: "镜面读到一种低能量的下沉感。它可能接近疲惫、失落、孤独或迟缓的难过。",
+    low_positive: "镜面读到一种低唤醒的稳定感。它可能接近平静、放松、满足或安全。",
+    neutral: "镜面还没有读到明显方向。你可以继续写得更具体，或先停留在这种不确定里。",
+  };
+  return reflections[mapping.quadrant] || reflections.neutral;
+}
+
+function localEmotion(text, existingMapping = null) {
+  const vaMapping = existingMapping || localVAMapping(text);
+  const overall = vaMapping.overall || vaMapper().mapVA({ valence: 0, arousal: 0, confidence: 0 });
+
+  return {
+    primary: overall.label,
+    key: overall.quadrant,
+    secondary: overall.nearest_label ? [overall.nearest_label] : [],
+    confidence: text.trim() ? overall.confidence : 0.12,
+    color: overall.color,
+    vad: { valence: overall.valence, arousal: overall.arousal, dominance: 0 },
+    reflection: reflectionFor(overall),
+    prompts: [
+      "这个词贴近吗？如果不贴近，哪个词更像？",
+      "身体里哪个位置最先出现这种感觉？",
+      "如果把它减轻 10%，你现在需要什么？",
+    ],
+    va_mapping: vaMapping,
+  };
+}
+
+function localDesign(text, existingMapping = null) {
+  const design = {};
+  const vaMapping = existingMapping || localVAMapping(text);
+  const overallStyle = styleForMapping(vaMapping.overall);
+  let cursor = 0;
+
+  for (const segment of vaMapping.segments || []) {
+    const start = text.indexOf(segment.text, cursor);
+    if (start === -1) continue;
+    cursor = start + segment.text.length;
+    const segmentStyle = {
+      ...styleForMapping(segment),
+      scale: 1.06,
+      weight: 580,
+    };
+    addStyleRange(design, start, segment.text.length, segmentStyle, true);
+  }
+
+  const lexicon = vaMapper().getEmotionLexicon().slice().sort((a, b) => b.label.length - a.label.length);
+  let styledTerms = 0;
+  for (const item of lexicon) {
+    const index = text.indexOf(item.label);
+    if (index === -1 || styledTerms >= 4) continue;
+    addStyleRange(design, index, item.label.length, styleForMapping(vaMapper().mapVA(item)));
+    styledTerms += 1;
+  }
+
+  if (!styledTerms) {
     const match = text.match(/[A-Za-z']{5,}|[\u4e00-\u9fff]{2,4}/);
     if (match) {
-      const emotion = localEmotion(text);
-      const index = match.index || 0;
-      for (let offset = 0; offset < match[0].length; offset += 1) {
-        design[String(index + offset)] = {
-          weight: 720,
-          scale: 1.25,
-          color: emotion.color,
-          animation: "float-drift",
-        };
-      }
+      addStyleRange(design, match.index || 0, match[0].length, overallStyle);
     }
   }
 
   return design;
 }
 
+function normalizeDesignColors(design = {}, mapping = {}) {
+  const style = styleForMapping(mapping);
+  return Object.fromEntries(
+    Object.entries(design).map(([key, value]) => [
+      key,
+      {
+        ...value,
+        color: style.color,
+        backgroundColor: value.backgroundColor || style.color,
+      },
+    ]),
+  );
+}
+
+function normalizeAnalysisPayload(payload) {
+  const text = journalText.value;
+  const fallbackMapping = localVAMapping(text);
+  const vaMapping = payload.va_mapping || payload.emotion?.va_mapping || fallbackMapping;
+  const overall = vaMapping.overall || fallbackMapping.overall;
+  const fallbackEmotion = localEmotion(text, vaMapping);
+  const emotion = {
+    ...fallbackEmotion,
+    ...(payload.emotion || {}),
+    primary: overall.label || payload.emotion?.primary || fallbackEmotion.primary,
+    key: overall.quadrant || payload.emotion?.key || fallbackEmotion.key,
+    confidence: overall.confidence ?? payload.emotion?.confidence ?? fallbackEmotion.confidence,
+    color: overall.color || payload.emotion?.color || fallbackEmotion.color,
+    va_mapping: vaMapping,
+  };
+
+  return { emotion, vaMapping, overall };
+}
+
 function applyAnalysis(payload) {
-  const emotion = payload.emotion || localEmotion(journalText.value);
+  const { emotion, vaMapping, overall } = normalizeAnalysisPayload(payload);
   selectedLabel = emotion.primary;
   primaryEmotion.textContent = selectedLabel;
   reflectionText.textContent = emotion.reflection;
   confidenceMeter.style.width = `${Math.round((emotion.confidence || 0) * 100)}%`;
   emotionDot.style.background = emotion.color || palette.mauve;
-  renderTypography(journalText.value, payload.llm_design || localDesign(journalText.value));
+
+  const hasRemoteDesign = payload.llm_design && Object.keys(payload.llm_design).length > 0;
+  const design = hasRemoteDesign
+    ? normalizeDesignColors(payload.llm_design, overall)
+    : localDesign(journalText.value, vaMapping);
+  renderTypography(journalText.value, design);
   renderChips(selectedLabel);
   renderPrompts(emotion.prompts || []);
 }
@@ -272,13 +338,18 @@ function renderPrompts(prompts) {
 async function analyzeText() {
   const text = journalText.value;
   if (!text.trim()) {
-    applyAnalysis({ emotion: localEmotion(text), llm_design: {} });
+    applyAnalysis({ emotion: localEmotion(text), va_mapping: localVAMapping(text), llm_design: {} });
     setStatus("Ready");
     return;
   }
 
+  const localMapping = localVAMapping(text);
   setStatus("Mirroring");
-  applyAnalysis({ emotion: localEmotion(text), llm_design: localDesign(text) });
+  applyAnalysis({
+    emotion: localEmotion(text, localMapping),
+    va_mapping: localMapping,
+    llm_design: localDesign(text, localMapping),
+  });
 
   try {
     const response = await fetch("/analyze-text", {
@@ -297,7 +368,8 @@ async function analyzeText() {
 
 function scheduleAnalysis() {
   clearTimeout(analyzeTimer);
-  renderTypography(journalText.value, localDesign(journalText.value));
+  const mapping = localVAMapping(journalText.value);
+  renderTypography(journalText.value, localDesign(journalText.value, mapping));
   analyzeTimer = setTimeout(analyzeText, 420);
 }
 
@@ -316,7 +388,7 @@ function renderHome() {
     homeMirrorWord.textContent = latest.label.split("/")[0].trim().toLowerCase();
     homeMirrorCaption.textContent = latest.date;
   } else {
-    latestEmotion.textContent = "Unclear";
+    latestEmotion.textContent = "中性";
     latestConfidence.textContent = "waiting for text";
     homeMirrorWord.textContent = "steady";
     homeMirrorCaption.textContent = "No entry yet today";
@@ -430,33 +502,41 @@ function toggleVoice() {
   }
 }
 
-viewButtons.forEach((button) => {
-  button.addEventListener("click", () => switchView(button.dataset.viewTarget));
-});
+function bindEvents() {
+  viewButtons.forEach((button) => {
+    button.addEventListener("click", () => switchView(button.dataset.viewTarget));
+  });
 
-journalText.addEventListener("input", scheduleAnalysis);
-intensityRange.addEventListener("input", () => {
-  homeIntensity.textContent = `${intensityRange.value}%`;
+  journalText.addEventListener("input", scheduleAnalysis);
+  intensityRange.addEventListener("input", () => {
+    homeIntensity.textContent = `${intensityRange.value}%`;
+    renderTypography(journalText.value, localDesign(journalText.value));
+    scheduleAnalysis();
+  });
+  saveEntry.addEventListener("click", saveCurrentEntry);
+  clearEntries.addEventListener("click", () => {
+    entries = [];
+    saveEntries();
+    renderHome();
+  });
+  voiceButton.addEventListener("click", toggleVoice);
+  voiceMode.addEventListener("click", toggleVoice);
+  typingMode.addEventListener("click", () => {
+    if (isListening && recognition) recognition.stop();
+    typingMode.classList.add("is-active");
+    voiceMode.classList.remove("is-active");
+  });
+}
+
+async function boot() {
+  await vaMapper().loadEmotionLexicon();
+  bindEvents();
+  setupSpeechRecognition();
+  renderChips("");
+  renderPrompts(localEmotion("").prompts);
   renderTypography(journalText.value, localDesign(journalText.value));
-  scheduleAnalysis();
-});
-saveEntry.addEventListener("click", saveCurrentEntry);
-clearEntries.addEventListener("click", () => {
-  entries = [];
-  saveEntries();
   renderHome();
-});
-voiceButton.addEventListener("click", toggleVoice);
-voiceMode.addEventListener("click", toggleVoice);
-typingMode.addEventListener("click", () => {
-  if (isListening && recognition) recognition.stop();
-  typingMode.classList.add("is-active");
-  voiceMode.classList.remove("is-active");
-});
+  scheduleAnalysis();
+}
 
-setupSpeechRecognition();
-renderChips("");
-renderPrompts(localEmotion("").prompts);
-renderTypography(journalText.value, localDesign(journalText.value));
-renderHome();
-scheduleAnalysis();
+boot();

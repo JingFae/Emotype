@@ -21,12 +21,30 @@ import re
 import librosa
 from pydub import AudioSegment
 
+try:
+    from emotion_rec.va_mapper import (
+        EMOTION_LEXICON,
+        map_segments,
+        map_va,
+        normalize_vad,
+        split_text_segments,
+    )
+except ModuleNotFoundError:
+    from va_mapper import (  # type: ignore
+        EMOTION_LEXICON,
+        map_segments,
+        map_va,
+        normalize_vad,
+        split_text_segments,
+    )
+
 # -----------------------------
 # LLM Configuration
 # -----------------------------
 LLM_API_HOST = os.getenv("LLM_API_HOST", "api.chatanywhere.tech")
 LLM_API_KEY = os.getenv("LLM_API_KEY", "")
 LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o")
+VAD_SOURCE_RANGE = os.getenv("VAD_SOURCE_RANGE", "zero_one")
 
 # -----------------------------
 # Model definition
@@ -65,6 +83,7 @@ class EmotionModel(Wav2Vec2PreTrainedModel):
 # -----------------------------
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
+SHARED_DIR = BASE_DIR / "shared"
 
 app = FastAPI(title="EmoMirror API")
 
@@ -78,6 +97,9 @@ app.add_middleware(
 
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+if SHARED_DIR.exists():
+    app.mount("/shared", StaticFiles(directory=str(SHARED_DIR)), name="shared")
 
 
 @app.get("/", include_in_schema=False)
@@ -141,222 +163,129 @@ def _llm_headers():
     }
 
 
-def build_fallback_typography_design(text: str, vad: dict, acoustics: dict):
-    """Generate a local design map when the remote LLM is unavailable."""
-    rules = [
-        {
-            "terms": {"angry", "mad", "hate", "urgent", "stop", "no", "生气", "愤怒", "讨厌", "烦", "委屈"},
-            "style": {"weight": 900, "scale": 1.75, "color": "#dc2626", "animation": "shake-hard"},
-            "emoji": "ANGRY",
-            "targets": "ao",
-        },
-        {
-            "terms": {"happy", "haha", "fun", "joy", "amazing", "wow", "cool", "won", "lottery", "开心", "高兴", "期待", "轻松", "喜欢"},
-            "style": {"weight": 850, "scale": 1.65, "color": "#f59e0b", "animation": "pulse-scale"},
-            "emoji": "HAPPY",
-            "targets": "ao",
-        },
-        {
-            "terms": {"sad", "cry", "lonely", "tired", "left", "难过", "失落", "孤独", "疲惫", "累", "想哭"},
-            "style": {"weight": 350, "scale": 1.45, "color": "#475569", "animation": "sad-droop"},
-            "emoji": "SAD",
-            "targets": "aeo",
-        },
-        {
-            "terms": {"love", "heart", "like", "爱", "温暖", "被理解"},
-            "style": {"weight": 800, "scale": 1.6, "color": "#ec4899", "animation": "float-drift"},
-            "emoji": "LOVE",
-            "targets": "ov",
-        },
-        {
-            "terms": {"anxious", "worry", "afraid", "fear", "焦虑", "担心", "紧张", "害怕", "不安"},
-            "style": {"weight": 720, "scale": 1.55, "color": "#5E5094", "animation": "shake-hard"},
-            "emoji": "THINK",
-            "targets": "io",
-        },
-        {
-            "terms": {"fire", "hot", "lit"},
-            "style": {"weight": 850, "scale": 1.6, "color": "#ef4444", "animation": "pulse-scale"},
-            "emoji": "FIRE",
-            "targets": "il",
-        },
-        {
-            "terms": {"time", "late", "now"},
-            "style": {"weight": 760, "scale": 1.55, "color": "#2563eb", "animation": "float-drift"},
-            "emoji": "CLOCK",
-            "targets": "oi",
-        },
-        {
-            "terms": {"pizza", "food"},
-            "style": {"weight": 820, "scale": 1.55, "color": "#ea580c", "animation": "pulse-scale"},
-            "emoji": "PIZZA",
-            "targets": "ai",
-        },
-    ]
+def _style_for_va_mapping(va_mapping: dict):
+    quadrant = va_mapping.get("quadrant", "neutral")
+    color = va_mapping.get("color", "#94A3B8")
+    styles = {
+        "high_negative": {"weight": 900, "scale": 1.72, "color": color, "animation": "shake-hard"},
+        "high_positive": {"weight": 850, "scale": 1.62, "color": color, "animation": "pulse-scale"},
+        "low_negative": {"weight": 420, "scale": 1.38, "color": color, "animation": "sad-droop"},
+        "low_positive": {"weight": 720, "scale": 1.42, "color": color, "animation": "float-drift"},
+        "neutral": {"weight": 560, "scale": 1.16, "color": color, "animation": "float-drift"},
+    }
+    return styles.get(quadrant, styles["neutral"])
 
+
+def _standard_vad_from_mapping(va_mapping: dict):
+    return {
+        "valence": float(va_mapping.get("valence", 0.0)),
+        "arousal": float(va_mapping.get("arousal", 0.0)),
+        "dominance": 0.0,
+    }
+
+
+def _infer_segment_va(segment_text: str):
+    lower_text = segment_text.lower()
     matches = []
-    lower_text = text.lower()
-    seen_ranges = set()
-    for rule in rules:
-        for term in sorted(rule["terms"], key=len, reverse=True):
-            term_lower = term.lower()
-            search_start = 0
-            while True:
-                idx = lower_text.find(term_lower, search_start)
-                if idx == -1:
-                    break
-                span_key = (idx, idx + len(term))
-                if span_key not in seen_ranges:
-                    matches.append((idx, text[idx:idx + len(term)], rule))
-                    seen_ranges.add(span_key)
-                search_start = idx + len(term)
-
-    for match in re.finditer(r"[A-Za-z']+", text):
-        word = match.group(0)
-        lower_word = word.lower().strip("'")
-        chosen_rule = None
-        for rule in rules:
-            if lower_word in rule["terms"]:
-                chosen_rule = rule
-                break
-        if chosen_rule and (match.start(), match.end()) not in seen_ranges:
-            matches.append((match.start(), word, chosen_rule))
-            seen_ranges.add((match.start(), match.end()))
+    for item in EMOTION_LEXICON:
+        label = item["label"]
+        if label and label in segment_text:
+            matches.append(item)
 
     if not matches:
-        words = list(re.finditer(r"[A-Za-z']+|[\u4e00-\u9fff]{1,4}", text))
-        if not words:
-            return {}
-        words.sort(key=lambda item: len(item.group(0)), reverse=True)
-        valence = float(vad.get("valence", 0.5))
-        arousal = float(vad.get("arousal", 0.5))
-        energy = float(acoustics.get("energy_norm", 0.5))
-        if valence < 0.38:
-            style = {"weight": 360, "scale": 1.3 + energy * 0.4, "color": "#475569", "animation": "sad-droop"}
-        elif arousal > 0.62:
-            style = {"weight": 860, "scale": 1.35 + energy * 0.5, "color": "#dc2626", "animation": "shake-hard"}
-        else:
-            style = {"weight": 760, "scale": 1.3 + energy * 0.45, "color": "#0f766e", "animation": "float-drift"}
-        matches.append((words[0].start(), words[0].group(0), {"style": style, "emoji": None, "targets": ""}))
+        english_hints = [
+            ({"angry", "mad", "hate", "anxious", "worry", "afraid", "tense", "tight"}, -0.5, 0.6),
+            ({"happy", "excited", "joy", "proud", "hopeful", "active", "amazing"}, 0.55, 0.55),
+            ({"sad", "lonely", "tired", "empty", "depressed", "bored", "low"}, -0.55, -0.55),
+            ({"calm", "safe", "relaxed", "peaceful", "comfortable", "love"}, 0.55, -0.55),
+        ]
+        for terms, valence, arousal in english_hints:
+            if any(term in lower_text for term in terms):
+                return {"valence": valence, "arousal": arousal, "confidence": 0.56}
+        return {"valence": 0.0, "arousal": 0.0, "confidence": 0.2}
+
+    weight = 1 / len(matches)
+    valence = sum(float(item["valence"]) * weight for item in matches)
+    arousal = sum(float(item["arousal"]) * weight for item in matches)
+    confidence = min(0.92, 0.44 + 0.12 * len(matches))
+    return {"valence": valence, "arousal": arousal, "confidence": confidence}
+
+
+def _infer_text_va_mapping(text: str):
+    segment_inputs = []
+    for segment in split_text_segments(text):
+        inferred = _infer_segment_va(segment)
+        segment_inputs.append({"text": segment, **inferred})
+
+    if not segment_inputs:
+        segment_inputs = [{"text": "", "valence": 0.0, "arousal": 0.0, "confidence": 0.0}]
+
+    return map_segments(segment_inputs)
+
+
+def build_fallback_typography_design(text: str, vad: dict, acoustics: dict):
+    """Generate local typography using V-A mapping color only."""
+    va_mapping = map_va(float(vad.get("valence", 0.0)), float(vad.get("arousal", 0.0)), vad.get("confidence"))
+    style = _style_for_va_mapping(va_mapping)
+    energy = float(acoustics.get("energy_norm", abs(va_mapping.get("arousal", 0.0))))
+    style["scale"] = max(style["scale"], 1.16 + min(1.0, abs(energy)) * 0.45)
+
+    matches = []
+    for item in EMOTION_LEXICON:
+        label = item["label"]
+        start = text.find(label)
+        if start != -1:
+            matches.append((start, label))
+
+    if not matches:
+        matches = [(match.start(), match.group(0)) for match in re.finditer(r"[A-Za-z']{4,}|[\u4e00-\u9fff]{2,4}", text)]
 
     matches.sort(key=lambda item: item[0])
     limit = 1 if len(re.findall(r"[A-Za-z']+|[\u4e00-\u9fff]+", text.strip())) <= 5 else 3
     final_design_map = {}
-    for start, word, rule in matches[:limit]:
-        emoji_applied = False
+    for start, word in matches[:limit]:
         for offset, char in enumerate(word):
-            if not char.strip():
-                continue
-            char_style = dict(rule["style"])
-            if (
-                rule.get("emoji")
-                and not emoji_applied
-                and char.lower() in rule.get("targets", "")
-            ):
-                char_style["emoji"] = rule["emoji"]
-                emoji_applied = True
-            final_design_map[str(start + offset)] = char_style
+            if char.strip():
+                final_design_map[str(start + offset)] = dict(style)
 
     return final_design_map
 
 
 def infer_text_emotion(text: str):
-    lower_text = text.lower()
-    lexicon = [
-        {
-            "key": "anger",
-            "label": "Anger / grievance",
-            "terms": {"angry", "mad", "hate", "annoyed", "unfair", "生气", "愤怒", "委屈", "讨厌", "烦", "不公平"},
-            "valence": 0.24,
-            "arousal": 0.78,
-            "color": "#BF68BE",
-        },
-        {
-            "key": "anxiety",
-            "label": "Anxiety / uncertainty",
-            "terms": {"anxious", "worry", "worried", "afraid", "fear", "焦虑", "担心", "紧张", "害怕", "不安"},
-            "valence": 0.34,
-            "arousal": 0.72,
-            "color": "#5E5094",
-        },
-        {
-            "key": "sadness",
-            "label": "Sadness / loneliness",
-            "terms": {"sad", "cry", "lonely", "tired", "empty", "难过", "失落", "孤独", "疲惫", "累", "想哭"},
-            "valence": 0.22,
-            "arousal": 0.34,
-            "color": "#949DCA",
-        },
-        {
-            "key": "joy",
-            "label": "Ease / positive energy",
-            "terms": {"happy", "joy", "fun", "amazing", "calm", "开心", "高兴", "轻松", "期待", "喜欢"},
-            "valence": 0.78,
-            "arousal": 0.56,
-            "color": "#A6CFCD",
-        },
-        {
-            "key": "tenderness",
-            "label": "Warmth / connection",
-            "terms": {"love", "heart", "safe", "understood", "爱", "温暖", "安心", "被理解", "陪伴"},
-            "valence": 0.74,
-            "arousal": 0.42,
-            "color": "#E2C7D4",
-        },
-    ]
-
-    scores = []
-    for item in lexicon:
-        count = sum(lower_text.count(term.lower()) for term in item["terms"])
-        if count:
-            scores.append((count, item))
-
-    if scores:
-        scores.sort(key=lambda pair: pair[0], reverse=True)
-        primary = scores[0][1]
-        secondary = [item["label"] for _, item in scores[1:3]]
-        confidence = min(0.92, 0.48 + scores[0][0] * 0.18)
-    else:
-        primary = {
-            "key": "unclear",
-            "label": "Unclear / gently mixed",
-            "valence": 0.5,
-            "arousal": 0.42,
-            "color": "#BEAACF",
-        }
-        secondary = []
-        confidence = 0.36 if text.strip() else 0.0
-
-    vad = {
-        "arousal": float(primary["arousal"]),
-        "dominance": 0.5,
-        "valence": float(primary["valence"]),
-    }
-    acoustics = {
-        "pitch_norm": 0.5,
-        "energy_norm": float(max(0.25, min(0.92, primary["arousal"]))),
-    }
+    va_mapping = _infer_text_va_mapping(text)
+    overall = va_mapping["overall"]
     reflection = (
-        "The mirror is reading a possible emotional direction, not making a diagnosis. "
-        "If this feels inaccurate, rename it in your own words."
+        "The mirror maps the inferred V-A position to a color and nearby emotion label. "
+        "It is a reflection aid, not a diagnosis."
     )
     prompts = [
         "What body sensation tells you this might be present?",
         "Which word feels closer than the first label?",
         "What would make this feeling 10% easier to carry?",
     ]
-
     return {
-        "primary": primary["label"],
-        "key": primary["key"],
-        "secondary": secondary,
-        "confidence": confidence,
-        "color": primary["color"],
+        "primary": overall["label"],
+        "key": overall["quadrant"],
+        "secondary": [],
+        "confidence": overall["confidence"],
+        "color": overall["color"],
         "reflection": reflection,
         "prompts": prompts,
-        "vad": vad,
-        "acoustics": acoustics,
+        "vad": _standard_vad_from_mapping(overall),
+        "acoustics": {"pitch_norm": 0.5, "energy_norm": abs(float(overall["arousal"]))},
+        "va_mapping": va_mapping,
     }
+
+
+def normalize_design_for_mapping(design: dict, va_mapping: dict):
+    style = _style_for_va_mapping(va_mapping)
+    normalized = {}
+    for key, value in design.items():
+        char_style = dict(value)
+        char_style["color"] = style["color"]
+        char_style.setdefault("animation", style["animation"])
+        normalized[key] = char_style
+    return normalized
 
 
 def apply_feedback_intensity(design: dict, intensity: float):
@@ -822,9 +751,12 @@ def process_typography_request(text: str, vad: dict, acoustics: dict):
 async def analyze_text(payload: TextAnalysisRequest):
     text = payload.text.strip()
     emotion = infer_text_emotion(text)
+    va_mapping = emotion["va_mapping"]
+    overall_mapping = va_mapping["overall"]
     design = {}
     if text:
         design = process_typography_request(text, emotion["vad"], emotion["acoustics"])
+        design = normalize_design_for_mapping(design, overall_mapping)
         design = apply_feedback_intensity(design, payload.intensity)
 
     return {
@@ -840,6 +772,7 @@ async def analyze_text(payload: TextAnalysisRequest):
         },
         "vad": emotion["vad"],
         "acoustics": emotion["acoustics"],
+        "va_mapping": va_mapping,
         "llm_design": design,
     }
 
@@ -875,9 +808,25 @@ async def predict(
             "dominance": float(vad_scores[1]),
             "valence": float(vad_scores[2]),
         }
+        vad_standard = normalize_vad(vad_dict, source_range=VAD_SOURCE_RANGE)
+        overall_mapping = map_va(vad_standard["valence"], vad_standard["arousal"])
 
         # 3. 声学特征提取 (Pitch, Energy)
         acoustics = extract_acoustic_features(wav_path)
+        segment_inputs = [
+            {
+                "text": segment,
+                "valence": vad_standard["valence"],
+                "arousal": vad_standard["arousal"],
+                "confidence": overall_mapping["confidence"],
+            }
+            for segment in split_text_segments(text)
+        ]
+        va_mapping = (
+            map_segments(segment_inputs)
+            if segment_inputs
+            else {"segments": [], "overall": overall_mapping}
+        )
 
         # 4. 🔥 视觉设计生成 (Demo 拦截 -> LLM)
         llm_design = {}
@@ -887,7 +836,8 @@ async def predict(
             # --- 关键修改：调用新的主控函数 ---
             # 这个函数会先检查是否命中 "won lottery", "left me" 等 Demo 关键词
             # 如果命中，直接返回预设 JSON；没命中才去调大模型。
-            llm_design = process_typography_request(text, vad_dict, acoustics)
+            llm_design = process_typography_request(text, vad_standard, acoustics)
+            llm_design = normalize_design_for_mapping(llm_design, va_mapping["overall"])
             print(f"LLM Design: {llm_design}")
             
             print(f"✅ Design Generated. Keys: {list(llm_design.keys()) if llm_design else 'None'}")
@@ -895,7 +845,9 @@ async def predict(
         # 5. 构造响应
         response = {
             "vad": vad_dict,
+            "vad_normalized": vad_standard,
             "acoustics": acoustics,
+            "va_mapping": va_mapping,
             "llm_design": llm_design, 
             "status": "success"
         }
