@@ -1,10 +1,18 @@
 import io
+import os
 import numpy as np
 import torch
 import torch.nn as nn
 import librosa
 from fastapi import FastAPI, UploadFile, File, HTTPException
-from transformers import Wav2Vec2Processor
+import transformers.utils as transformers_utils
+from transformers import Wav2Vec2FeatureExtractor
+from transformers.utils import import_utils as transformers_import_utils
+
+transformers_import_utils._torchvision_available = False
+transformers_import_utils.is_torchvision_available = lambda: False
+transformers_utils.is_torchvision_available = lambda: False
+
 from transformers.models.wav2vec2.modeling_wav2vec2 import (
     Wav2Vec2Model,
     Wav2Vec2PreTrainedModel,
@@ -39,7 +47,7 @@ class EmotionModel(Wav2Vec2PreTrainedModel):
         self.config = config
         self.wav2vec2 = Wav2Vec2Model(config)
         self.classifier = RegressionHead(config)
-        self.init_weights()
+        self.post_init()
 
     def forward(self, input_values):
         outputs = self.wav2vec2(input_values)
@@ -56,14 +64,17 @@ app = FastAPI(title="VibeType Emotion API", description="Audio to Valence-Arousa
 
 # 配置
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
+DEFAULT_MODEL_PATH = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "Wav2vec-2.0")
+)
+MODEL_PATH = os.getenv("MODEL_NAME_OR_PATH", DEFAULT_MODEL_PATH)
 # 注意：请确保服务器上这个路径是可访问的，或者换成相对路径
-MODEL_PATH = '/public/home/202320163218/dong/models/wav2vec' 
 TARGET_SAMPLING_RATE = 16000
 
 print(f"Loading model from {MODEL_PATH} on {DEVICE}...")
 
 try:
-    processor = Wav2Vec2Processor.from_pretrained(MODEL_PATH)
+    processor = Wav2Vec2FeatureExtractor.from_pretrained(MODEL_PATH)
     model = EmotionModel.from_pretrained(MODEL_PATH).to(DEVICE)
     model.eval() # 设置为评估模式
     print("Model loaded successfully.")

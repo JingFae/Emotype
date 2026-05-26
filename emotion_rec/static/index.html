@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>EmoMirror</title>
-    <link rel="stylesheet" href="/static/styles.css" />
+    <link rel="stylesheet" href="/static/styles.css?v=20260526-va3" />
   </head>
   <body>
     <main class="app-shell">
@@ -123,26 +123,46 @@
 
             <div class="emotion-panel">
               <div>
-                <span class="panel-label">Detected direction</span>
+                <span class="panel-label">识别结果</span>
                 <strong id="primaryEmotion">Unclear / gently mixed</strong>
-                <p id="reflectionText">
-                  The mirror will suggest a direction as you write. You can rename it anytime.
-                </p>
+                <p class="coordinate-summary" id="reflectionText"></p>
               </div>
               <div class="confidence-meter" aria-label="Confidence">
                 <i id="confidenceMeter"></i>
               </div>
             </div>
 
-            <div class="chip-row" id="emotionChips" aria-label="Manual emotion labels"></div>
+            <div class="chip-row" id="emotionChips" aria-label="Candidate emotion labels"></div>
 
-            <div class="prompt-row" id="promptRow"></div>
+            <div class="label-editor" aria-label="Edit diary emotion label">
+              <label class="custom-label-control" for="customEmotionLabel">
+                <span>自定义标签</span>
+                <input id="customEmotionLabel" type="text" placeholder="输入更贴近的情绪词" autocomplete="off" />
+              </label>
+              <button class="ghost-button" type="button" id="applyCustomLabel">应用标签</button>
+            </div>
+
+            <section class="va-control" aria-label="Valence arousal coordinate">
+              <div class="va-control-head">
+                <span class="panel-label">V-A 坐标</span>
+                <strong id="vaReadout">V 0.00 · A 0.00</strong>
+              </div>
+              <div class="va-plane" id="vaPlane" role="slider" tabindex="0" aria-label="Valence and arousal position">
+                <span class="va-axis va-axis-x"></span>
+                <span class="va-axis va-axis-y"></span>
+                <span class="va-axis-label va-positive">积极</span>
+                <span class="va-axis-label va-negative">消极</span>
+                <span class="va-axis-label va-high">高能量</span>
+                <span class="va-axis-label va-low">低能量</span>
+                <button class="va-handle" id="vaHandle" type="button" aria-label="Emotion coordinate handle"></button>
+              </div>
+            </section>
           </section>
         </div>
       </section>
     </main>
 
-    <script src="/static/vaMapper.js" defer></script>
-    <script src="/static/app.js" defer></script>
+    <script src="/static/vaMapper.js?v=20260526-va3" defer></script>
+    <script src="/static/app.js?v=20260526-va3" defer></script>
   </body>
 </html>

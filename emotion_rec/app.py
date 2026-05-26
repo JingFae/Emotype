@@ -12,7 +12,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
-from transformers import Wav2Vec2Processor
+import transformers.utils as transformers_utils
+from transformers import Wav2Vec2FeatureExtractor
+from transformers.utils import import_utils as transformers_import_utils
+
+transformers_import_utils._torchvision_available = False
+transformers_import_utils.is_torchvision_available = lambda: False
+transformers_utils.is_torchvision_available = lambda: False
+
 from transformers.models.wav2vec2.modeling_wav2vec2 import (
     Wav2Vec2Model,
     Wav2Vec2PreTrainedModel,
@@ -29,6 +36,7 @@ try:
         normalize_vad,
         split_text_segments,
     )
+    from emotion_rec.text_emotion import analyze_text_emotion
 except ModuleNotFoundError:
     from va_mapper import (  # type: ignore
         EMOTION_LEXICON,
@@ -37,6 +45,7 @@ except ModuleNotFoundError:
         normalize_vad,
         split_text_segments,
     )
+    from text_emotion import analyze_text_emotion  # type: ignore
 
 # -----------------------------
 # LLM Configuration
@@ -44,6 +53,7 @@ except ModuleNotFoundError:
 LLM_API_HOST = os.getenv("LLM_API_HOST", "api.chatanywhere.tech")
 LLM_API_KEY = os.getenv("LLM_API_KEY", "")
 LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o")
+LLM_TIMEOUT_SECONDS = float(os.getenv("LLM_TIMEOUT_SECONDS", "20"))
 VAD_SOURCE_RANGE = os.getenv("VAD_SOURCE_RANGE", "zero_one")
 
 # -----------------------------
@@ -69,7 +79,7 @@ class EmotionModel(Wav2Vec2PreTrainedModel):
         self.config = config
         self.wav2vec2 = Wav2Vec2Model(config)
         self.classifier = RegressionHead(config)
-        self.init_weights()
+        self.post_init()
 
     def forward(self, input_values):
         outputs = self.wav2vec2(input_values)
@@ -130,7 +140,7 @@ def _load():
     global processor, model
     print(f"Loading model from: {MODEL_NAME_OR_PATH} using {device}...")
     try:
-        processor = Wav2Vec2Processor.from_pretrained(MODEL_NAME_OR_PATH)
+        processor = Wav2Vec2FeatureExtractor.from_pretrained(MODEL_NAME_OR_PATH)
         model = EmotionModel.from_pretrained(MODEL_NAME_OR_PATH).to(device)
         model.eval()
         print("Model loaded successfully!")
@@ -184,45 +194,6 @@ def _standard_vad_from_mapping(va_mapping: dict):
     }
 
 
-def _infer_segment_va(segment_text: str):
-    lower_text = segment_text.lower()
-    matches = []
-    for item in EMOTION_LEXICON:
-        label = item["label"]
-        if label and label in segment_text:
-            matches.append(item)
-
-    if not matches:
-        english_hints = [
-            ({"angry", "mad", "hate", "anxious", "worry", "afraid", "tense", "tight"}, -0.5, 0.6),
-            ({"happy", "excited", "joy", "proud", "hopeful", "active", "amazing"}, 0.55, 0.55),
-            ({"sad", "lonely", "tired", "empty", "depressed", "bored", "low"}, -0.55, -0.55),
-            ({"calm", "safe", "relaxed", "peaceful", "comfortable", "love"}, 0.55, -0.55),
-        ]
-        for terms, valence, arousal in english_hints:
-            if any(term in lower_text for term in terms):
-                return {"valence": valence, "arousal": arousal, "confidence": 0.56}
-        return {"valence": 0.0, "arousal": 0.0, "confidence": 0.2}
-
-    weight = 1 / len(matches)
-    valence = sum(float(item["valence"]) * weight for item in matches)
-    arousal = sum(float(item["arousal"]) * weight for item in matches)
-    confidence = min(0.92, 0.44 + 0.12 * len(matches))
-    return {"valence": valence, "arousal": arousal, "confidence": confidence}
-
-
-def _infer_text_va_mapping(text: str):
-    segment_inputs = []
-    for segment in split_text_segments(text):
-        inferred = _infer_segment_va(segment)
-        segment_inputs.append({"text": segment, **inferred})
-
-    if not segment_inputs:
-        segment_inputs = [{"text": "", "valence": 0.0, "arousal": 0.0, "confidence": 0.0}]
-
-    return map_segments(segment_inputs)
-
-
 def build_fallback_typography_design(text: str, vad: dict, acoustics: dict):
     """Generate local typography using V-A mapping color only."""
     va_mapping = map_va(float(vad.get("valence", 0.0)), float(vad.get("arousal", 0.0)), vad.get("confidence"))
@@ -252,27 +223,25 @@ def build_fallback_typography_design(text: str, vad: dict, acoustics: dict):
 
 
 def infer_text_emotion(text: str):
-    va_mapping = _infer_text_va_mapping(text)
+    text_emotion = analyze_text_emotion(text)
+    va_mapping = map_segments(text_emotion["segments"])
     overall = va_mapping["overall"]
-    reflection = (
-        "The mirror maps the inferred V-A position to a color and nearby emotion label. "
-        "It is a reflection aid, not a diagnosis."
-    )
-    prompts = [
-        "What body sensation tells you this might be present?",
-        "Which word feels closer than the first label?",
-        "What would make this feeling 10% easier to carry?",
+    nearby_labels = [
+        item["label"]
+        for item in overall.get("candidates", [])
+        if item.get("label") and item["label"] != overall["label"]
     ]
     return {
         "primary": overall["label"],
         "key": overall["quadrant"],
-        "secondary": [],
+        "secondary": nearby_labels[:6],
         "confidence": overall["confidence"],
         "color": overall["color"],
-        "reflection": reflection,
-        "prompts": prompts,
+        "reflection": "",
+        "prompts": [],
         "vad": _standard_vad_from_mapping(overall),
         "acoustics": {"pitch_norm": 0.5, "energy_norm": abs(float(overall["arousal"]))},
+        "text_emotion": text_emotion,
         "va_mapping": va_mapping,
     }
 
@@ -285,6 +254,50 @@ def normalize_design_for_mapping(design: dict, va_mapping: dict):
         char_style["color"] = style["color"]
         char_style.setdefault("animation", style["animation"])
         normalized[key] = char_style
+    return normalized
+
+
+def build_segment_typography_design(text: str, va_mapping: dict):
+    design = {}
+    cursor = 0
+    for segment in va_mapping.get("segments", []):
+        segment_text = str(segment.get("text", "")).strip()
+        if not segment_text:
+            continue
+        start = text.find(segment_text, cursor)
+        if start == -1:
+            start = text.find(segment_text)
+        if start == -1:
+            continue
+        cursor = start + len(segment_text)
+        style = _style_for_va_mapping(segment)
+        segment_style = {
+            "weight": 580,
+            "scale": 1.06,
+            "color": style["color"],
+            "backgroundColor": style["color"],
+            "animation": "float-drift" if segment.get("quadrant") == "neutral" else style["animation"],
+        }
+        for offset, char in enumerate(segment_text):
+            if char.strip():
+                design[str(start + offset)] = dict(segment_style)
+    return design
+
+
+def normalize_design_for_segments(design: dict, text: str, va_mapping: dict):
+    segment_design = build_segment_typography_design(text, va_mapping)
+    overall_style = _style_for_va_mapping(va_mapping.get("overall", {}))
+    normalized = dict(segment_design)
+
+    for key, value in design.items():
+        base_style = dict(segment_design.get(key, {}))
+        char_style = {**base_style, **dict(value)}
+        mapper_color = base_style.get("color", overall_style["color"])
+        char_style["color"] = mapper_color
+        char_style["backgroundColor"] = base_style.get("backgroundColor", mapper_color)
+        char_style.setdefault("animation", base_style.get("animation", overall_style["animation"]))
+        normalized[key] = char_style
+
     return normalized
 
 
@@ -492,7 +505,7 @@ def call_llm_typography_design(text: str, vad: dict, acoustics: dict):
         if not headers:
             return build_fallback_typography_design(text, vad, acoustics)
 
-        conn = http.client.HTTPSConnection(LLM_API_HOST)
+        conn = http.client.HTTPSConnection(LLM_API_HOST, timeout=LLM_TIMEOUT_SECONDS)
         payload = json.dumps({
             "model": LLM_MODEL,
             "messages": [
@@ -596,7 +609,7 @@ def call_llm_typography_design_2(text: str, vad: dict, acoustics: dict):
         if not headers:
             return build_fallback_typography_design(text, vad, acoustics)
 
-        conn = http.client.HTTPSConnection(LLM_API_HOST)
+        conn = http.client.HTTPSConnection(LLM_API_HOST, timeout=LLM_TIMEOUT_SECONDS)
         payload = json.dumps({
             "model": LLM_MODEL,
             "messages": [
@@ -756,7 +769,7 @@ async def analyze_text(payload: TextAnalysisRequest):
     design = {}
     if text:
         design = process_typography_request(text, emotion["vad"], emotion["acoustics"])
-        design = normalize_design_for_mapping(design, overall_mapping)
+        design = normalize_design_for_segments(design, text, va_mapping)
         design = apply_feedback_intensity(design, payload.intensity)
 
     return {
@@ -772,6 +785,7 @@ async def analyze_text(payload: TextAnalysisRequest):
         },
         "vad": emotion["vad"],
         "acoustics": emotion["acoustics"],
+        "text_emotion": emotion["text_emotion"],
         "va_mapping": va_mapping,
         "llm_design": design,
     }
@@ -837,7 +851,7 @@ async def predict(
             # 这个函数会先检查是否命中 "won lottery", "left me" 等 Demo 关键词
             # 如果命中，直接返回预设 JSON；没命中才去调大模型。
             llm_design = process_typography_request(text, vad_standard, acoustics)
-            llm_design = normalize_design_for_mapping(llm_design, va_mapping["overall"])
+            llm_design = normalize_design_for_segments(llm_design, text, va_mapping)
             print(f"LLM Design: {llm_design}")
             
             print(f"✅ Design Generated. Keys: {list(llm_design.keys()) if llm_design else 'None'}")

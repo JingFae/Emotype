@@ -204,6 +204,46 @@
     };
   }
 
+  function getEmotionCandidates(valence, arousal, limit = 8) {
+    const v = clamp(valence);
+    const a = clamp(arousal);
+    const candidates = getEmotionLexicon()
+      .map((item) => {
+        const distance = Math.sqrt((v - item.valence) ** 2 + (a - item.arousal) ** 2);
+        const confidence = clamp(1 - distance / CONFIDENCE_DISTANCE_SCALE, 0, 1);
+        const quadrant = item.quadrant || getQuadrant(item.valence, item.arousal);
+        return {
+          label: item.label,
+          valence: clamp(item.valence),
+          arousal: clamp(item.arousal),
+          distance,
+          confidence,
+          quadrant,
+          quadrant_label: QUADRANT_LABELS[quadrant],
+          color: getEmotionColor(item.valence, item.arousal),
+          source: "lexicon_nearby",
+        };
+      })
+      .sort((left, right) => left.distance - right.distance)
+      .slice(0, Math.max(1, Number(limit) || 8));
+
+    if (getQuadrant(v, a) === "neutral") {
+      candidates.unshift({
+        label: "中性",
+        valence: v,
+        arousal: a,
+        distance: 0,
+        confidence: 1,
+        quadrant: "neutral",
+        quadrant_label: QUADRANT_LABELS.neutral,
+        color: NEUTRAL_COLOR,
+        source: "neutral_center",
+      });
+    }
+
+    return candidates.slice(0, Math.max(1, Number(limit) || 8));
+  }
+
   function mapVA(input, arousal, confidence) {
     const raw = typeof input === "object" && input !== null
       ? input
@@ -230,6 +270,7 @@
       quadrant_label: QUADRANT_LABELS[quadrant],
       color: getEmotionColor(valence, nextArousal),
       nearest_label: labelResult.nearest_label,
+      candidates: getEmotionCandidates(valence, nextArousal),
     };
   }
 
@@ -280,6 +321,7 @@
     getQuadrant,
     getEmotionColor,
     getEmotionLabel,
+    getEmotionCandidates,
     mapVA,
     splitTextSegments,
     mapSegments,

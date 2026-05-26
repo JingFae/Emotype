@@ -559,6 +559,10 @@ textarea:focus {
   line-height: 1.5;
 }
 
+.coordinate-summary:empty {
+  display: none;
+}
+
 .confidence-meter {
   height: 9px;
   overflow: hidden;
@@ -594,9 +598,160 @@ textarea:focus {
   font-weight: 850;
 }
 
+.emotion-chip {
+  border-color: var(--chip-color, var(--plum));
+  box-shadow: inset 0 0 0 1px rgba(94, 80, 148, 0.08);
+}
+
 .emotion-chip.is-active {
   color: #ffffff;
-  background: var(--plum);
+  border-color: var(--chip-color, var(--plum));
+  background: var(--chip-color, var(--plum));
+}
+
+.label-editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.custom-label-control {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.custom-label-control input {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 12px;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.74);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  outline: none;
+}
+
+.custom-label-control input:focus,
+.va-plane:focus-visible {
+  border-color: rgba(94, 80, 148, 0.52);
+  box-shadow: 0 0 0 3px rgba(169, 158, 223, 0.22);
+}
+
+.va-control {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.52);
+}
+
+.va-control-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.va-control-head strong {
+  color: var(--plum);
+  font-size: 13px;
+}
+
+.va-plane {
+  --active-color: var(--plum);
+  position: relative;
+  display: block;
+  height: 210px;
+  min-height: 210px;
+  overflow: hidden;
+  border: 1px solid rgba(94, 80, 148, 0.18);
+  border-radius: 8px;
+  cursor: crosshair;
+  touch-action: none;
+  background:
+    linear-gradient(90deg, rgba(37, 99, 235, 0.20), rgba(148, 163, 184, 0.14) 50%, rgba(16, 185, 129, 0.20)),
+    linear-gradient(180deg, rgba(245, 158, 11, 0.24), rgba(148, 163, 184, 0.14) 50%, rgba(37, 99, 235, 0.18));
+}
+
+.va-axis {
+  position: absolute;
+  pointer-events: none;
+  background: rgba(94, 80, 148, 0.34);
+}
+
+.va-axis-x {
+  top: 50%;
+  left: 10px;
+  right: 10px;
+  height: 1px;
+}
+
+.va-axis-y {
+  top: 10px;
+  bottom: 10px;
+  left: 50%;
+  width: 1px;
+}
+
+.va-axis-label {
+  position: absolute;
+  color: rgba(65, 57, 101, 0.72);
+  font-size: 11px;
+  font-weight: 900;
+  pointer-events: none;
+}
+
+.va-positive {
+  right: 10px;
+  top: calc(50% + 8px);
+}
+
+.va-negative {
+  left: 10px;
+  top: calc(50% + 8px);
+}
+
+.va-high {
+  left: calc(50% + 8px);
+  top: 10px;
+}
+
+.va-low {
+  left: calc(50% + 8px);
+  bottom: 10px;
+}
+
+.va-handle {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 24px;
+  height: 24px;
+  border: 3px solid #ffffff;
+  border-radius: 50%;
+  background: var(--active-color);
+  box-shadow: 0 8px 22px rgba(65, 57, 101, 0.28);
+  transform: translate(-50%, -50%);
+  transition:
+    background 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.va-handle::after {
+  position: absolute;
+  inset: -9px;
+  border: 1px solid var(--active-color);
+  border-radius: inherit;
+  content: "";
+  opacity: 0.45;
 }
 
 @keyframes pulseScale {
@@ -689,7 +844,8 @@ textarea:focus {
 
   .section-head,
   .editor-tools,
-  .emotion-panel {
+  .emotion-panel,
+  .label-editor {
     grid-template-columns: 1fr;
     align-items: stretch;
   }
@@ -706,6 +862,10 @@ textarea:focus {
   .type-stage {
     min-height: 360px;
     padding: 16px;
+  }
+
+  .va-plane {
+    min-height: 190px;
   }
 
   .glyph {

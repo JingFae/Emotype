@@ -1,7 +1,15 @@
+import os
 import numpy as np
 import torch
 import torch.nn as nn
-from transformers import Wav2Vec2Processor
+import transformers.utils as transformers_utils
+from transformers import Wav2Vec2FeatureExtractor
+from transformers.utils import import_utils as transformers_import_utils
+
+transformers_import_utils._torchvision_available = False
+transformers_import_utils.is_torchvision_available = lambda: False
+transformers_utils.is_torchvision_available = lambda: False
+
 from transformers.models.wav2vec2.modeling_wav2vec2 import (
     Wav2Vec2Model,
     Wav2Vec2PreTrainedModel,
@@ -41,7 +49,7 @@ class EmotionModel(Wav2Vec2PreTrainedModel):
         self.config = config
         self.wav2vec2 = Wav2Vec2Model(config)
         self.classifier = RegressionHead(config)
-        self.init_weights()
+        self.post_init()
 
     def forward(
             self,
@@ -59,8 +67,11 @@ class EmotionModel(Wav2Vec2PreTrainedModel):
 
 # load model from hub
 device = 'cpu'
-model_name = '/public/home/202320163218/dong/models/wav2vec'
-processor = Wav2Vec2Processor.from_pretrained(model_name)
+default_model_path = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "Wav2vec-2.0")
+)
+model_name = os.getenv("MODEL_NAME_OR_PATH", default_model_path)
+processor = Wav2Vec2FeatureExtractor.from_pretrained(model_name)
 model = EmotionModel.from_pretrained(model_name).to(device)
 
 # dummy signal

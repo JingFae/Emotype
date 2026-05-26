@@ -27,6 +27,18 @@ export type EmotionLabelResult = {
   nearest_label?: string;
 };
 
+export type EmotionCandidate = {
+  label: string;
+  valence: number;
+  arousal: number;
+  distance: number;
+  confidence: number;
+  quadrant: EmotionQuadrant;
+  quadrant_label: string;
+  color: string;
+  source: string;
+};
+
 export type VAMapping = {
   valence: number;
   arousal: number;
@@ -39,6 +51,7 @@ export type VAMapping = {
   quadrant_label: string;
   color: string;
   nearest_label?: string;
+  candidates: EmotionCandidate[];
 };
 
 export type SegmentMapping = VAMapping & {
@@ -257,6 +270,46 @@ export function getEmotionLabel(valence: number, arousal: number): EmotionLabelR
   };
 }
 
+export function getEmotionCandidates(valence: number, arousal: number, limit = 8): EmotionCandidate[] {
+  const v = clamp(valence);
+  const a = clamp(arousal);
+  const candidates = getEmotionLexicon()
+    .map((item) => {
+      const distance = Math.sqrt((v - item.valence) ** 2 + (a - item.arousal) ** 2);
+      const confidence = clamp(1 - distance / CONFIDENCE_DISTANCE_SCALE, 0, 1);
+      const quadrant = item.quadrant || getQuadrant(item.valence, item.arousal);
+      return {
+        label: item.label,
+        valence: clamp(item.valence),
+        arousal: clamp(item.arousal),
+        distance,
+        confidence,
+        quadrant,
+        quadrant_label: QUADRANT_LABELS[quadrant],
+        color: getEmotionColor(item.valence, item.arousal),
+        source: "lexicon_nearby",
+      };
+    })
+    .sort((left, right) => left.distance - right.distance)
+    .slice(0, Math.max(1, Number(limit) || 8));
+
+  if (getQuadrant(v, a) === "neutral") {
+    candidates.unshift({
+      label: "中性",
+      valence: v,
+      arousal: a,
+      distance: 0,
+      confidence: 1,
+      quadrant: "neutral",
+      quadrant_label: QUADRANT_LABELS.neutral,
+      color: NEUTRAL_COLOR,
+      source: "neutral_center",
+    });
+  }
+
+  return candidates.slice(0, Math.max(1, Number(limit) || 8));
+}
+
 export function mapVA(input: VADInput | number, arousal?: number, confidence?: number): VAMapping {
   const raw = typeof input === "object" && input !== null
     ? input
@@ -282,6 +335,7 @@ export function mapVA(input: VADInput | number, arousal?: number, confidence?: n
     quadrant_label: QUADRANT_LABELS[quadrant],
     color: getEmotionColor(valence, nextArousal),
     nearest_label: labelResult.nearest_label,
+    candidates: getEmotionCandidates(valence, nextArousal),
   };
 }
 

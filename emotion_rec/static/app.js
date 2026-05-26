@@ -10,6 +10,11 @@ const reflectionText = document.querySelector("#reflectionText");
 const confidenceMeter = document.querySelector("#confidenceMeter");
 const emotionDot = document.querySelector("#emotionDot");
 const emotionChips = document.querySelector("#emotionChips");
+const customEmotionLabel = document.querySelector("#customEmotionLabel");
+const applyCustomLabel = document.querySelector("#applyCustomLabel");
+const vaPlane = document.querySelector("#vaPlane");
+const vaHandle = document.querySelector("#vaHandle");
+const vaReadout = document.querySelector("#vaReadout");
 const promptRow = document.querySelector("#promptRow");
 const saveEntry = document.querySelector("#saveEntry");
 const entryList = document.querySelector("#entryList");
@@ -34,23 +39,64 @@ const palette = {
   mauve: "#BEAACF",
 };
 
-const labelOptions = [
-  "中性",
-  "复杂情绪",
-  "消极高能量",
-  "积极高能量",
-  "消极低能量",
-  "积极低能量",
-];
-
 let entries = JSON.parse(localStorage.getItem("emomirror.entries") || "[]");
 let selectedLabel = "";
 let analyzeTimer = null;
 let recognition = null;
 let isListening = false;
+let currentOverallMapping = null;
+let currentCandidates = [];
+let currentDesign = {};
+let isDraggingVA = false;
 
 function vaMapper() {
   return window.VAMapper;
+}
+
+function clampNumber(value, lower = -1, upper = 1) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return 0;
+  return Math.max(lower, Math.min(upper, number));
+}
+
+function formatSigned(value) {
+  const number = clampNumber(value);
+  return `${number >= 0 ? "+" : ""}${number.toFixed(2)}`;
+}
+
+function quadrantPreset(label) {
+  const labels = vaMapper().QUADRANT_LABELS || {};
+  const presets = {
+    [labels.neutral || "中性"]: { valence: 0, arousal: 0, quadrant: "neutral" },
+    [labels.high_negative || "消极高能量"]: { valence: -0.62, arousal: 0.62, quadrant: "high_negative" },
+    [labels.high_positive || "积极高能量"]: { valence: 0.62, arousal: 0.62, quadrant: "high_positive" },
+    [labels.low_negative || "消极低能量"]: { valence: -0.62, arousal: -0.62, quadrant: "low_negative" },
+    [labels.low_positive || "积极低能量"]: { valence: 0.62, arousal: -0.62, quadrant: "low_positive" },
+  };
+  return presets[label] || null;
+}
+
+function lexiconItemForLabel(label) {
+  return vaMapper().getEmotionLexicon().find((item) => item.label === label) || null;
+}
+
+function candidateFromLabel(label, fallback = {}) {
+  const lexiconItem = lexiconItemForLabel(label);
+  const preset = quadrantPreset(label);
+  const source = lexiconItem || preset || fallback;
+  const valence = clampNumber(source.valence ?? fallback.valence ?? 0);
+  const arousal = clampNumber(source.arousal ?? fallback.arousal ?? 0);
+  const mapped = vaMapper().mapVA({
+    valence,
+    arousal,
+    confidence: source.confidence ?? fallback.confidence ?? 0.72,
+  });
+
+  return {
+    ...mapped,
+    label,
+    source: source.source || fallback.source || "candidate",
+  };
 }
 
 function switchView(targetId) {
@@ -184,14 +230,7 @@ function localVAMapping(text) {
 }
 
 function reflectionFor(mapping) {
-  const reflections = {
-    high_negative: "镜面读到一种高能量的紧绷感。它可能接近愤怒、焦虑或不安，也可能只是身体在提醒你需要边界。",
-    high_positive: "镜面读到一种明亮、上扬的能量。它可能接近兴奋、开心、期待或被激活的专注。",
-    low_negative: "镜面读到一种低能量的下沉感。它可能接近疲惫、失落、孤独或迟缓的难过。",
-    low_positive: "镜面读到一种低唤醒的稳定感。它可能接近平静、放松、满足或安全。",
-    neutral: "镜面还没有读到明显方向。你可以继续写得更具体，或先停留在这种不确定里。",
-  };
-  return reflections[mapping.quadrant] || reflections.neutral;
+  return "";
 }
 
 function localEmotion(text, existingMapping = null) {
@@ -206,11 +245,7 @@ function localEmotion(text, existingMapping = null) {
     color: overall.color,
     vad: { valence: overall.valence, arousal: overall.arousal, dominance: 0 },
     reflection: reflectionFor(overall),
-    prompts: [
-      "这个词贴近吗？如果不贴近，哪个词更像？",
-      "身体里哪个位置最先出现这种感觉？",
-      "如果把它减轻 10%，你现在需要什么？",
-    ],
+    prompts: [],
     va_mapping: vaMapping,
   };
 }
@@ -259,11 +294,129 @@ function normalizeDesignColors(design = {}, mapping = {}) {
       key,
       {
         ...value,
-        color: style.color,
+        color: value.color || style.color,
         backgroundColor: value.backgroundColor || style.color,
       },
     ]),
   );
+}
+
+function recolorDesign(design = {}, mapping = {}) {
+  const style = styleForMapping(mapping);
+  const baseDesign = Object.keys(design || {}).length
+    ? design
+    : localDesign(journalText.value, { segments: [], overall: mapping });
+
+  return Object.fromEntries(
+    Object.entries(baseDesign).map(([key, value]) => [
+      key,
+      {
+        ...value,
+        color: style.color,
+        backgroundColor: style.color,
+      },
+    ]),
+  );
+}
+
+function nearestLexiconCandidates(mapping = {}, limit = 8) {
+  const valence = clampNumber(mapping.valence ?? 0);
+  const arousal = clampNumber(mapping.arousal ?? 0);
+  return vaMapper()
+    .getEmotionLexicon()
+    .map((item) => ({
+      ...item,
+      distance: Math.sqrt((valence - item.valence) ** 2 + (arousal - item.arousal) ** 2),
+      source: "nearby",
+    }))
+    .sort((a, b) => a.distance - b.distance)
+    .slice(0, limit)
+    .map((item) => candidateFromLabel(item.label, item));
+}
+
+function buildEmotionCandidates(payload = {}, overall = {}, vaMapping = {}) {
+  const candidates = [];
+  const seen = new Set();
+
+  const addCandidate = (candidateLike, fallback = {}) => {
+    const label = typeof candidateLike === "string" ? candidateLike : candidateLike?.label;
+    if (!label || seen.has(label)) return;
+    seen.add(label);
+    candidates.push(candidateFromLabel(label, { ...overall, ...fallback, ...(candidateLike || {}) }));
+  };
+
+  addCandidate(overall.label, { ...overall, source: "detected" });
+  addCandidate(overall.nearest_label, { ...overall, source: "nearest" });
+  (overall.candidates || []).forEach((candidate) => addCandidate(candidate, { source: "backend_nearby" }));
+  (vaMapping.candidates || []).forEach((candidate) => addCandidate(candidate, { source: "backend_nearby" }));
+
+  const segmentSources = [
+    ...(vaMapping.segments || []),
+    ...(payload.text_emotion?.segments || []),
+  ];
+
+  segmentSources.forEach((segment) => {
+    ["implicit_label", "explicit_label", "label", "nearest_label"].forEach((key) => {
+      addCandidate(segment[key], { ...segment, source: key });
+    });
+  });
+
+  nearestLexiconCandidates(overall, 8).forEach((candidate) => addCandidate(candidate));
+
+  return candidates.slice(0, 12);
+}
+
+function updateVAControl(mapping = {}) {
+  const valence = clampNumber(mapping.valence ?? 0);
+  const arousal = clampNumber(mapping.arousal ?? 0);
+  const color = mapping.color || vaMapper().getEmotionColor(valence, arousal);
+  const x = ((valence + 1) / 2) * 100;
+  const y = ((1 - arousal) / 2) * 100;
+
+  vaHandle.style.left = `${x}%`;
+  vaHandle.style.top = `${y}%`;
+  vaHandle.style.background = color;
+  vaPlane.style.setProperty("--active-color", color);
+  vaReadout.textContent = `V ${formatSigned(valence)} · A ${formatSigned(arousal)}`;
+  vaPlane.setAttribute("aria-valuetext", `Valence ${formatSigned(valence)}, arousal ${formatSigned(arousal)}`);
+}
+
+function applyManualMapping(mapping = {}, options = {}) {
+  const mapped = vaMapper().mapVA({
+    valence: mapping.valence,
+    arousal: mapping.arousal,
+    confidence: mapping.source_confidence ?? mapping.confidence ?? 0.8,
+  });
+  const next = {
+    ...mapped,
+    ...mapping,
+    valence: mapped.valence,
+    arousal: mapped.arousal,
+    color: mapped.color,
+    quadrant: mapped.quadrant,
+    quadrant_label: mapped.quadrant_label,
+    label: mapping.label || mapped.label,
+  };
+
+  currentOverallMapping = next;
+  selectedLabel = next.label;
+  primaryEmotion.textContent = selectedLabel;
+  reflectionText.textContent = reflectionFor(next);
+  confidenceMeter.style.width = `${Math.round((next.confidence || 0) * 100)}%`;
+  emotionDot.style.background = next.color || palette.mauve;
+  updateVAControl(next);
+
+  if (options.refreshCandidates) {
+    currentCandidates = buildEmotionCandidates({}, next, { segments: [] });
+  } else if (options.addToCandidates && !currentCandidates.some((candidate) => candidate.label === next.label)) {
+    currentCandidates = [{ ...next, source: "custom" }, ...currentCandidates].slice(0, 12);
+  }
+  if (options.syncInput !== false) {
+    customEmotionLabel.value = options.custom ? next.label : "";
+  }
+
+  renderTypography(journalText.value, recolorDesign(currentDesign, next));
+  renderChips(selectedLabel);
 }
 
 function normalizeAnalysisPayload(payload) {
@@ -287,16 +440,23 @@ function normalizeAnalysisPayload(payload) {
 
 function applyAnalysis(payload) {
   const { emotion, vaMapping, overall } = normalizeAnalysisPayload(payload);
+  currentOverallMapping = overall;
+  currentCandidates = buildEmotionCandidates(payload, overall, vaMapping);
   selectedLabel = emotion.primary;
   primaryEmotion.textContent = selectedLabel;
   reflectionText.textContent = emotion.reflection;
   confidenceMeter.style.width = `${Math.round((emotion.confidence || 0) * 100)}%`;
   emotionDot.style.background = emotion.color || palette.mauve;
+  if (document.activeElement !== customEmotionLabel) {
+    customEmotionLabel.value = "";
+  }
+  updateVAControl(overall);
 
   const hasRemoteDesign = payload.llm_design && Object.keys(payload.llm_design).length > 0;
   const design = hasRemoteDesign
     ? normalizeDesignColors(payload.llm_design, overall)
     : localDesign(journalText.value, vaMapping);
+  currentDesign = design;
   renderTypography(journalText.value, design);
   renderChips(selectedLabel);
   renderPrompts(emotion.prompts || []);
@@ -304,21 +464,27 @@ function applyAnalysis(payload) {
 
 function renderChips(activeLabel) {
   emotionChips.textContent = "";
-  labelOptions.forEach((label) => {
+  const candidates = currentCandidates.length
+    ? currentCandidates
+    : nearestLexiconCandidates(currentOverallMapping || { valence: 0, arousal: 0 }, 8);
+
+  candidates.forEach((candidate) => {
     const button = document.createElement("button");
-    button.className = `emotion-chip ${label === activeLabel ? "is-active" : ""}`;
+    button.className = `emotion-chip ${candidate.label === activeLabel ? "is-active" : ""}`;
     button.type = "button";
-    button.textContent = label;
+    button.textContent = candidate.label;
+    button.style.setProperty("--chip-color", candidate.color || vaMapper().NEUTRAL_COLOR);
+    button.title = `V ${formatSigned(candidate.valence)} · A ${formatSigned(candidate.arousal)}`;
     button.addEventListener("click", () => {
-      selectedLabel = label;
-      primaryEmotion.textContent = label;
-      renderChips(label);
+      applyManualMapping(candidate);
+      setStatus("Label adjusted");
     });
     emotionChips.appendChild(button);
   });
 }
 
 function renderPrompts(prompts) {
+  if (!promptRow) return;
   promptRow.textContent = "";
   prompts.slice(0, 3).forEach((prompt) => {
     const button = document.createElement("button");
@@ -428,9 +594,14 @@ function saveCurrentEntry() {
     return;
   }
   const confidence = Math.round(Number(confidenceMeter.style.width.replace("%", "")) || 0);
+  const mapping = currentOverallMapping || vaMapper().mapVA({ valence: 0, arousal: 0, confidence: 0 });
   entries.unshift({
     text,
     label: selectedLabel || primaryEmotion.textContent,
+    valence: mapping.valence,
+    arousal: mapping.arousal,
+    color: mapping.color,
+    quadrant: mapping.quadrant,
     confidence,
     date: new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date()),
   });
@@ -502,6 +673,32 @@ function toggleVoice() {
   }
 }
 
+function mappingFromPointer(event) {
+  const rect = vaPlane.getBoundingClientRect();
+  const x = clampNumber((event.clientX - rect.left) / rect.width, 0, 1);
+  const y = clampNumber((event.clientY - rect.top) / rect.height, 0, 1);
+  return vaMapper().mapVA({
+    valence: x * 2 - 1,
+    arousal: 1 - y * 2,
+    confidence: currentOverallMapping?.source_confidence ?? currentOverallMapping?.confidence ?? 0.82,
+  });
+}
+
+function applyVAPointer(event) {
+  applyManualMapping(mappingFromPointer(event), { refreshCandidates: true });
+  setStatus("Coordinate adjusted");
+}
+
+function nudgeVA(deltaValence, deltaArousal) {
+  const base = currentOverallMapping || vaMapper().mapVA({ valence: 0, arousal: 0, confidence: 0.8 });
+  applyManualMapping(vaMapper().mapVA({
+    valence: clampNumber(base.valence + deltaValence),
+    arousal: clampNumber(base.arousal + deltaArousal),
+    confidence: base.source_confidence ?? base.confidence ?? 0.8,
+  }), { refreshCandidates: true });
+  setStatus("Coordinate adjusted");
+}
+
 function bindEvents() {
   viewButtons.forEach((button) => {
     button.addEventListener("click", () => switchView(button.dataset.viewTarget));
@@ -510,10 +707,54 @@ function bindEvents() {
   journalText.addEventListener("input", scheduleAnalysis);
   intensityRange.addEventListener("input", () => {
     homeIntensity.textContent = `${intensityRange.value}%`;
-    renderTypography(journalText.value, localDesign(journalText.value));
+    if (currentOverallMapping) {
+      renderTypography(journalText.value, recolorDesign(currentDesign, currentOverallMapping));
+    } else {
+      renderTypography(journalText.value, localDesign(journalText.value));
+    }
     scheduleAnalysis();
   });
   saveEntry.addEventListener("click", saveCurrentEntry);
+  applyCustomLabel.addEventListener("click", () => {
+    const label = customEmotionLabel.value.trim();
+    if (!label) return;
+    const base = currentOverallMapping || vaMapper().mapVA({ valence: 0, arousal: 0, confidence: 0.8 });
+    applyManualMapping({ ...base, label }, { addToCandidates: true, custom: true });
+    setStatus("Custom label applied");
+  });
+  customEmotionLabel.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      applyCustomLabel.click();
+    }
+  });
+  vaPlane.addEventListener("pointerdown", (event) => {
+    isDraggingVA = true;
+    vaPlane.setPointerCapture(event.pointerId);
+    applyVAPointer(event);
+  });
+  vaPlane.addEventListener("pointermove", (event) => {
+    if (isDraggingVA) applyVAPointer(event);
+  });
+  vaPlane.addEventListener("pointerup", () => {
+    isDraggingVA = false;
+  });
+  vaPlane.addEventListener("pointercancel", () => {
+    isDraggingVA = false;
+  });
+  vaPlane.addEventListener("keydown", (event) => {
+    const step = event.shiftKey ? 0.14 : 0.06;
+    const moves = {
+      ArrowLeft: [-step, 0],
+      ArrowRight: [step, 0],
+      ArrowUp: [0, step],
+      ArrowDown: [0, -step],
+    };
+    const move = moves[event.key];
+    if (!move) return;
+    event.preventDefault();
+    nudgeVA(move[0], move[1]);
+  });
   clearEntries.addEventListener("click", () => {
     entries = [];
     saveEntries();

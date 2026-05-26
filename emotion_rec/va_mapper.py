@@ -157,6 +157,64 @@ def get_emotion_label(valence: float, arousal: float) -> dict[str, Any]:
     }
 
 
+def get_emotion_candidates(
+    valence: float,
+    arousal: float,
+    limit: int = 8,
+) -> list[dict[str, Any]]:
+    """Return nearby lexicon labels around a V-A point.
+
+    These are not quadrant fallbacks. They are the closest emotion words in the
+    shared 80-word V-A lexicon, ordered by Euclidean distance.
+    """
+
+    v = clamp(valence)
+    a = clamp(arousal)
+    nearest = sorted(
+        EMOTION_LEXICON,
+        key=lambda item: math.sqrt((v - item["valence"]) ** 2 + (a - item["arousal"]) ** 2),
+    )
+
+    candidates = []
+    for item in nearest[:max(1, int(limit))]:
+        item_valence = clamp(item["valence"])
+        item_arousal = clamp(item["arousal"])
+        distance = math.sqrt((v - item_valence) ** 2 + (a - item_arousal) ** 2)
+        confidence = max(0.0, min(1.0, 1 - distance / CONFIDENCE_DISTANCE_SCALE))
+        quadrant = item.get("quadrant") or get_quadrant(item_valence, item_arousal)
+        candidates.append(
+            {
+                "label": item["label"],
+                "valence": item_valence,
+                "arousal": item_arousal,
+                "distance": distance,
+                "confidence": confidence,
+                "quadrant": quadrant,
+                "quadrant_label": QUADRANT_LABELS[quadrant],
+                "color": get_emotion_color(item_valence, item_arousal),
+                "source": "lexicon_nearby",
+            }
+        )
+
+    if get_quadrant(v, a) == "neutral":
+        candidates.insert(
+            0,
+            {
+                "label": "中性",
+                "valence": v,
+                "arousal": a,
+                "distance": 0.0,
+                "confidence": 1.0,
+                "quadrant": "neutral",
+                "quadrant_label": QUADRANT_LABELS["neutral"],
+                "color": NEUTRAL_COLOR,
+                "source": "neutral_center",
+            },
+        )
+
+    return candidates[:max(1, int(limit))]
+
+
 def map_va(
     valence: float,
     arousal: float,
@@ -185,6 +243,7 @@ def map_va(
         "quadrant_label": QUADRANT_LABELS[get_quadrant(v, a)],
         "color": get_emotion_color(v, a),
         "nearest_label": label_result.get("nearest_label"),
+        "candidates": get_emotion_candidates(v, a),
     }
 
 
@@ -206,6 +265,9 @@ def map_segments(segments: list[dict[str, Any]]) -> dict[str, Any]:
             segment.get("confidence"),
         )
         mapped["text"] = text
+        for metadata_key in ("explicit_label", "implicit_label", "evidence", "source"):
+            if metadata_key in segment:
+                mapped[metadata_key] = segment[metadata_key]
         mapped_segments.append(mapped)
 
         weight = max(1, len(text)) * max(0.05, float(mapped["confidence"]))
