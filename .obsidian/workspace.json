@@ -1,0 +1,207 @@
+{
+  "main": {
+    "id": "9c992a5ee612e886",
+    "type": "split",
+    "children": [
+      {
+        "id": "ddcbd7ddade673b7",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "8b36ef4b2cb7139c",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "Idea/EmoMirror_情绪计算与渲染技术方案.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "EmoMirror_情绪计算与渲染技术方案"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "3ab827a4f15090be",
+    "type": "split",
+    "children": [
+      {
+        "id": "983893c6113f82ad",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "db3f243a622352bd",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false
+              },
+              "icon": "lucide-folder-closed",
+              "title": "文件列表"
+            }
+          },
+          {
+            "id": "d22bf359907f89a9",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "搜索"
+            }
+          },
+          {
+            "id": "a09c6c0f3b02c895",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "书签"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "8b07be7e675a183f",
+    "type": "split",
+    "children": [
+      {
+        "id": "cb75bca213e73912",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "c014d1b09a341c8f",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "反向链接"
+            }
+          },
+          {
+            "id": "12cf0321a5a8aae8",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "出链"
+            }
+          },
+          {
+            "id": "d0d7aa6a8f4ef847",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "标签"
+            }
+          },
+          {
+            "id": "9739c8cb0632e1cd",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "添加笔记属性"
+            }
+          },
+          {
+            "id": "844f7ed4b40188a8",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "未命名.base",
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "未命名 的大纲"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:打开快速切换": false,
+      "graph:查看关系图谱": false,
+      "canvas:新建白板": false,
+      "daily-notes:打开/创建今天的日记": false,
+      "templates:插入模板": false,
+      "command-palette:打开命令面板": false,
+      "bases:新建数据库": false
+    }
+  },
+  "active": "8b36ef4b2cb7139c",
+  "lastOpenFiles": [
+    "emotion_rec/static-preview.err.log",
+    "emotion_rec/static-preview.out.log",
+    "emotion_rec/__pycache__/text_emotion.cpython-311.pyc",
+    "emotion_rec/text_emotion.py",
+    "Idea/EmoMirror_情绪计算与渲染技术方案.md",
+    "未命名.base",
+    "Idea/EmoMirror.md",
+    "未命名.md",
+    "emotion_rec/static/emomirror-mark.svg",
+    "emotion_rec/static/emomirror-lockup.svg",
+    "emotion_rec/static/emomirror-icon.svg",
+    "Dockerfile",
+    "requirements-web.txt",
+    "DEPLOYMENT.md",
+    "emotion_rec/static/app.js",
+    "emotion_rec/static/styles.css",
+    "emotion_rec/static/index.html",
+    "Design/色卡.jpg",
+    "色卡.jpg",
+    "Idea"
+  ]
+}
