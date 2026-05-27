@@ -58,6 +58,7 @@ let isDraggingVA = false;
 let participant = JSON.parse(localStorage.getItem("emomirror.participant") || "null");
 let currentAnalysisPayload = {};
 let detectedOverallMapping = null;
+let currentVAMapping = null;
 
 function vaMapper() {
   return window.VAMapper;
@@ -67,6 +68,54 @@ function clampNumber(value, lower = -1, upper = 1) {
   const number = Number(value);
   if (!Number.isFinite(number)) return 0;
   return Math.max(lower, Math.min(upper, number));
+}
+
+const NEGATION_PREFIXES = ["不", "没", "沒", "没有", "沒有", "未", "无", "無", "并不", "並不", "不是", "别", "別"];
+
+function isNegatedMatch(text, label, index) {
+  const prefix = String(text || "").slice(Math.max(0, index - 4), index).toLowerCase();
+  return NEGATION_PREFIXES.some((term) => prefix.endsWith(term.toLowerCase()));
+}
+
+function containsUnnegatedAny(text, terms) {
+  const source = String(text || "");
+  const lower = source.toLowerCase();
+  return terms
+    .slice()
+    .sort((left, right) => right.length - left.length)
+    .some((term) => {
+      const termLower = term.toLowerCase();
+      let cursor = 0;
+      while (cursor < lower.length) {
+        const index = lower.indexOf(termLower, cursor);
+        if (index === -1) return false;
+        if (!isNegatedMatch(source, term, index)) return true;
+        cursor = index + termLower.length;
+      }
+      return false;
+    });
+}
+
+function lexiconMatchesForText(text) {
+  const source = String(text || "");
+  const lower = source.toLowerCase();
+  return vaMapper()
+    .getEmotionLexicon()
+    .slice()
+    .sort((left, right) => String(right.label || "").length - String(left.label || "").length)
+    .filter((item) => {
+      const label = String(item.label || "");
+      if (!label) return false;
+      const labelLower = label.toLowerCase();
+      let cursor = 0;
+      while (cursor < lower.length) {
+        const index = lower.indexOf(labelLower, cursor);
+        if (index === -1) return false;
+        if (Number(item.valence) <= 0 || !isNegatedMatch(source, label, index)) return true;
+        cursor = index + labelLower.length;
+      }
+      return false;
+    });
 }
 
 function formatSigned(value) {
@@ -296,6 +345,132 @@ function styleForMapping(mapping = {}) {
   return styles[mapping.quadrant] || styles.neutral;
 }
 
+const EMOTION_RENDER_RULES = [
+  { terms: ["暴怒", "狂怒"], emoji: "😡", tone: "rage", animation: "shake-hard", scale: 1.26, backgroundAlpha: 0.16 },
+  { terms: ["愤怒", "生气", "很生气", "恼火"], emoji: "😠", tone: "anger", animation: "shake-hard", scale: 1.18, backgroundAlpha: 0.15 },
+  { terms: ["烦躁", "懊恼", "不耐烦", "不高兴"], emoji: "😤", tone: "irritation", animation: "shake-hard", scale: 1.12, backgroundAlpha: 0.13 },
+  { terms: ["焦虑", "紧张", "坐立不安", "紧绷"], emoji: "😰", tone: "anxiety", animation: "shake-hard", scale: 1.14, backgroundAlpha: 0.14 },
+  { terms: ["担心", "忧虑", "不安"], emoji: "😟", tone: "worry", animation: "float-drift", scale: 1.08, backgroundAlpha: 0.11 },
+  { terms: ["害怕"], emoji: "😨", tone: "fear", animation: "shake-hard", scale: 1.16, backgroundAlpha: 0.14 },
+  { terms: ["憎恶", "厌恶"], emoji: "🤢", tone: "disgust", animation: "sad-droop", scale: 1.08, backgroundAlpha: 0.12 },
+  { terms: ["目瞪口呆", "惊讶"], emoji: "😮", tone: "surprise", animation: "pulse-scale", scale: 1.14, backgroundAlpha: 0.11 },
+
+  { terms: ["兴奋", "狂喜", "兴高采烈"], emoji: "🤩", tone: "ecstatic", animation: "pulse-scale", scale: 1.24, backgroundAlpha: 0.15 },
+  { terms: ["激动", "激动人心", "活跃"], emoji: "⚡", tone: "activated", animation: "pulse-scale", scale: 1.18, backgroundAlpha: 0.13 },
+  { terms: ["开心", "快乐", "欢快", "愉快"], emoji: "😊", tone: "joy", animation: "float-drift", scale: 1.1, backgroundAlpha: 0.11 },
+  { terms: ["幸福", "满怀希望", "乐观"], emoji: "🌤️", tone: "hope", animation: "float-drift", scale: 1.1, backgroundAlpha: 0.1 },
+  { terms: ["热情", "积极", "精力充沛"], emoji: "✨", tone: "spark", animation: "pulse-scale", scale: 1.16, backgroundAlpha: 0.13 },
+  { terms: ["专注"], emoji: "🎯", tone: "focus", animation: "float-drift", scale: 1.08, backgroundAlpha: 0.1 },
+  { terms: ["自豪", "自信感", "有成就感"], emoji: "🌟", tone: "pride", animation: "pulse-scale", scale: 1.12, backgroundAlpha: 0.11 },
+
+  { terms: ["悲伤", "沮丧", "低落", "失望"], emoji: "😢", tone: "sadness", animation: "sad-droop", scale: 1.1, backgroundAlpha: 0.12 },
+  { terms: ["忧郁", "抑郁", "绝望", "凄凉"], emoji: "🌧️", tone: "despair", animation: "sad-droop", scale: 1.16, backgroundAlpha: 0.14 },
+  { terms: ["孤独", "疏离"], emoji: "🫥", tone: "lonely", animation: "sad-droop", scale: 1.08, backgroundAlpha: 0.1 },
+  { terms: ["疲惫", "耗尽", "精疲力竭"], emoji: "😮‍💨", tone: "exhausted", animation: "sad-droop", scale: 1.12, backgroundAlpha: 0.11 },
+  { terms: ["厌倦", "无聊", "冷漠", "消极"], emoji: "☁️", tone: "flat", animation: "float-drift", scale: 1.06, backgroundAlpha: 0.09 },
+  { terms: ["挫败"], emoji: "😞", tone: "defeated", animation: "sad-droop", scale: 1.08, backgroundAlpha: 0.12 },
+
+  { terms: ["平静", "安宁", "安详"], emoji: "🌿", tone: "calm", animation: "float-drift", scale: 1.08, backgroundAlpha: 0.1 },
+  { terms: ["放松", "松弛", "舒适", "安逸", "悠闲"], emoji: "🍃", tone: "relaxed", animation: "float-drift", scale: 1.08, backgroundAlpha: 0.1 },
+  { terms: ["安全"], emoji: "🛟", tone: "safe", animation: "float-drift", scale: 1.06, backgroundAlpha: 0.09 },
+  { terms: ["满足", "满意", "满意的"], emoji: "😌", tone: "content", animation: "float-drift", scale: 1.08, backgroundAlpha: 0.1 },
+  { terms: ["感恩", "爱意"], emoji: "💛", tone: "warmth", animation: "float-drift", scale: 1.1, backgroundAlpha: 0.11 },
+  { terms: ["平衡"], emoji: "⚖️", tone: "balance", animation: "float-drift", scale: 1.04, backgroundAlpha: 0.09 },
+  { terms: ["自在", "无忧无虑", "惬意"], emoji: "🌱", tone: "ease", animation: "float-drift", scale: 1.08, backgroundAlpha: 0.1 },
+  { terms: ["冷静"], emoji: "🫧", tone: "cool", animation: "float-drift", scale: 1.04, backgroundAlpha: 0.08 },
+
+  { terms: ["回避", "否认式表达"], emoji: "🫧", tone: "avoidance", animation: "float-drift", scale: 1.06, backgroundAlpha: 0.08 },
+  { terms: ["身体紧绷", "胸口", "胸口紧"], emoji: "🫀", tone: "body", animation: "pulse-scale", scale: 1.08, backgroundAlpha: 0.1 },
+  { terms: ["复杂情绪"], emoji: "🌀", tone: "complex", animation: "float-drift", scale: 1.08, backgroundAlpha: 0.1 },
+  { terms: ["中性"], emoji: "😐", tone: "neutral", animation: "float-drift", scale: 1.0, backgroundAlpha: 0.07 },
+];
+
+const QUADRANT_RENDER_FALLBACK = {
+  high_negative: { emoji: "😣", tone: "high-negative", animation: "shake-hard", scale: 1.1, backgroundAlpha: 0.12 },
+  high_positive: { emoji: "✨", tone: "high-positive", animation: "pulse-scale", scale: 1.12, backgroundAlpha: 0.12 },
+  low_negative: { emoji: "☁️", tone: "low-negative", animation: "sad-droop", scale: 1.08, backgroundAlpha: 0.1 },
+  low_positive: { emoji: "🌿", tone: "low-positive", animation: "float-drift", scale: 1.06, backgroundAlpha: 0.09 },
+  neutral: { emoji: "😐", tone: "neutral", animation: "float-drift", scale: 1.0, backgroundAlpha: 0.07 },
+};
+
+function emotionRenderSignal(mapping = {}) {
+  if (mapping.emoji) {
+    return {
+      ...(QUADRANT_RENDER_FALLBACK[mapping.quadrant] || QUADRANT_RENDER_FALLBACK.neutral),
+      emoji: mapping.emoji,
+    };
+  }
+
+  const label = [
+    mapping.implicit_label,
+    mapping.label,
+    mapping.explicit_label,
+    mapping.nearest_label,
+    ...(Array.isArray(mapping.evidence) ? mapping.evidence : []),
+  ].filter(Boolean).join(" ");
+  const hit = EMOTION_RENDER_RULES.find((rule) => rule.terms.some((term) => label.includes(term)));
+  return hit || QUADRANT_RENDER_FALLBACK[mapping.quadrant] || QUADRANT_RENDER_FALLBACK.neutral;
+}
+
+function emojiForEmotion(mapping = {}) {
+  return emotionRenderSignal(mapping).emoji;
+}
+
+function buildEmojiInsertions(text, vaMapping = null) {
+  const sourceText = String(text || "");
+  const mapping = vaMapping || currentVAMapping;
+  const insertions = new Map();
+  if (!sourceText.trim() || !mapping) return insertions;
+
+  const segments = (mapping.segments || []).filter((segment) => String(segment.text || "").trim());
+  let cursor = 0;
+  let emojiCount = 0;
+  for (const segment of segments) {
+    if (emojiCount >= 4) break;
+    if (Number(segment.confidence ?? 0.5) < 0.18) continue;
+    const segmentText = String(segment.text || "").trim();
+    const start = sourceText.indexOf(segmentText, cursor);
+    if (start === -1) continue;
+    let end = start + segmentText.length - 1;
+    while (end + 1 < sourceText.length && /[。！？!?，,；;]/.test(sourceText[end + 1])) {
+      end += 1;
+    }
+    cursor = end + 1;
+    if (!insertions.has(end)) {
+      insertions.set(end, { emoji: emojiForEmotion(segment), mapping: segment });
+      emojiCount += 1;
+    }
+  }
+
+  if (!insertions.size && mapping.overall && sourceText.trim()) {
+    const end = Math.max(0, sourceText.search(/\s*$/) - 1);
+    insertions.set(end, { emoji: emojiForEmotion(mapping.overall), mapping: mapping.overall });
+  }
+
+  return insertions;
+}
+
+function createEmojiGlyph(emoji, mapping = {}) {
+  const span = document.createElement("span");
+  const signal = emotionRenderSignal(mapping);
+  const baseStyle = styleForMapping(mapping);
+  const style = applyIntensity({
+    ...baseStyle,
+    animation: signal.animation || baseStyle.animation,
+    scale: signal.scale || 1.08,
+  });
+  const scale = Number.isFinite(Number(style.scale)) ? Math.max(0.9, Math.min(1.7, Number(style.scale))) : 1;
+  span.className = `glyph emoji emoji-${signal.tone || "neutral"} ${animationClass(style.animation)}`;
+  span.textContent = emoji;
+  span.style.setProperty("--scale", scale);
+  span.style.setProperty("--glyph-weight", 620);
+  span.style.setProperty("--glyph-color", style.color || "var(--ink)");
+  if (style.backgroundColor) {
+    span.style.backgroundColor = hexToRgba(style.backgroundColor, signal.backgroundAlpha ?? 0.1);
+  }
+  return span;
+}
+
 function addStyleRange(design, start, length, style, onlyIfEmpty = false) {
   for (let offset = 0; offset < length; offset += 1) {
     const key = String(start + offset);
@@ -304,9 +479,10 @@ function addStyleRange(design, start, length, style, onlyIfEmpty = false) {
   }
 }
 
-function renderTypography(text, design = {}) {
+function renderTypography(text, design = {}, vaMapping = null) {
   typeStage.textContent = "";
   const fragment = document.createDocumentFragment();
+  const emojiInsertions = buildEmojiInsertions(text, vaMapping);
 
   [...text || "Start writing to see the mirror."].forEach((char, index) => {
     const span = document.createElement("span");
@@ -322,6 +498,11 @@ function renderTypography(text, design = {}) {
       span.style.borderRadius = "0.28em";
     }
     fragment.appendChild(span);
+
+    const emojiInsertion = emojiInsertions.get(index);
+    if (emojiInsertion) {
+      fragment.appendChild(createEmojiGlyph(emojiInsertion.emoji, emojiInsertion.mapping));
+    }
   });
 
   typeStage.appendChild(fragment);
@@ -338,11 +519,34 @@ function averageMatches(matches) {
 
 function inferSegmentVA(segmentText) {
   const lower = segmentText.toLowerCase();
-  const lexiconMatches = vaMapper()
-    .getEmotionLexicon()
-    .filter((item) => item.label && segmentText.includes(item.label));
+  const negatedMoodRules = [
+    { terms: ["很不开心", "非常不开心"], valence: -0.54, arousal: -0.2, confidence: 0.78, explicit_label: "不高兴", implicit_label: "低落", evidence: ["否定情绪词：不开心"] },
+    { terms: ["不开心"], valence: -0.46, arousal: -0.16, confidence: 0.72, explicit_label: "不高兴", implicit_label: "低落", evidence: ["否定情绪词：不开心"] },
+    { terms: ["不高兴", "不满意", "不喜欢"], valence: -0.4, arousal: 0.18, confidence: 0.68, explicit_label: "不高兴", implicit_label: "不满", evidence: ["否定评价"] },
+    { terms: ["不舒服"], valence: -0.4, arousal: 0.22, confidence: 0.66, explicit_label: "不安", implicit_label: "身体不适", evidence: ["否定身体感受"] },
+    { terms: ["不安全"], valence: -0.42, arousal: 0.48, confidence: 0.68, explicit_label: "不安", implicit_label: "警觉", evidence: ["否定安全感"] },
+  ];
+  const negatedHit = negatedMoodRules.find((rule) => rule.terms.some((term) => lower.includes(term.toLowerCase())));
+  if (negatedHit) return negatedHit;
+
+  const implicitHints = [
+    { terms: ["不知道该怎么办", "不知道該怎麼辦", "怎么办", "怎麼辦", "纠结", "糾結", "要不要", "犹豫", "猶豫"], valence: -0.36, arousal: 0.48, confidence: 0.66, explicit_label: "不安", implicit_label: "纠结", evidence: ["决策不确定"] },
+    { terms: ["压力", "壓力", "学习压力", "學習壓力", "压力很大", "壓力很大", "撑不住", "撐不住", "崩溃", "崩潰"], valence: -0.62, arousal: 0.72, confidence: 0.76, explicit_label: "紧绷", implicit_label: "压力过载", evidence: ["压力过载"] },
+    { terms: ["胸口", "心慌", "睡不着", "睡不著", "紧", "緊"], valence: -0.45, arousal: 0.65, confidence: 0.78, explicit_label: "不安", implicit_label: "焦虑", evidence: ["身体紧绷"] },
+  ];
+  const implicitHit = implicitHints.find((hint) => hint.terms.some((term) => lower.includes(term.toLowerCase())));
+  if (implicitHit) return implicitHit;
+
+  const lexiconMatches = lexiconMatchesForText(segmentText);
 
   if (lexiconMatches.length) return averageMatches(lexiconMatches);
+
+  const positiveHints = [
+    { terms: ["开心", "開心", "高兴", "高興", "期待", "兴奋", "興奮"], valence: 0.62, arousal: 0.52, confidence: 0.62, explicit_label: "开心", implicit_label: "开心", evidence: ["积极高唤醒线索"] },
+    { terms: ["安心", "放松", "放鬆", "舒服", "平静", "平靜", "安全"], valence: 0.48, arousal: -0.48, confidence: 0.62, explicit_label: "平静", implicit_label: "放松", evidence: ["积极低唤醒线索"] },
+  ];
+  const positiveHit = positiveHints.find((hint) => containsUnnegatedAny(segmentText, hint.terms));
+  if (positiveHit) return positiveHit;
 
   const englishHints = [
     { terms: ["angry", "mad", "hate", "anxious", "worry", "afraid", "tense", "tight"], valence: -0.5, arousal: 0.6 },
@@ -412,9 +616,13 @@ function localDesign(text, existingMapping = null) {
   const lexicon = vaMapper().getEmotionLexicon().slice().sort((a, b) => b.label.length - a.label.length);
   let styledTerms = 0;
   for (const item of lexicon) {
-    const index = text.indexOf(item.label);
+    const label = String(item.label || "");
+    let index = text.indexOf(label);
+    while (index !== -1 && Number(item.valence) > 0 && isNegatedMatch(text, label, index)) {
+      index = text.indexOf(label, index + label.length);
+    }
     if (index === -1 || styledTerms >= 4) continue;
-    addStyleRange(design, index, item.label.length, styleForMapping(vaMapper().mapVA(item)));
+    addStyleRange(design, index, label.length, styleForMapping(vaMapper().mapVA(item)));
     styledTerms += 1;
   }
 
@@ -556,7 +764,8 @@ function applyManualMapping(mapping = {}, options = {}) {
     customEmotionLabel.value = options.custom ? next.label : "";
   }
 
-  renderTypography(journalText.value, recolorDesign(currentDesign, next));
+  currentVAMapping = { segments: [], overall: next };
+  renderTypography(journalText.value, recolorDesign(currentDesign, next), currentVAMapping);
   renderChips(selectedLabel);
 }
 
@@ -584,6 +793,7 @@ function applyAnalysis(payload) {
   currentAnalysisPayload = payload;
   detectedOverallMapping = overall;
   currentOverallMapping = overall;
+  currentVAMapping = vaMapping;
   currentCandidates = buildEmotionCandidates(payload, overall, vaMapping);
   selectedLabel = emotion.primary;
   primaryEmotion.textContent = selectedLabel;
@@ -600,7 +810,7 @@ function applyAnalysis(payload) {
     ? normalizeDesignColors(payload.llm_design, overall)
     : localDesign(journalText.value, vaMapping);
   currentDesign = design;
-  renderTypography(journalText.value, design);
+  renderTypography(journalText.value, design, vaMapping);
   renderChips(selectedLabel);
   renderPrompts(emotion.prompts || []);
 }
@@ -684,7 +894,8 @@ async function analyzeText() {
 function scheduleAnalysis() {
   clearTimeout(analyzeTimer);
   const mapping = localVAMapping(journalText.value);
-  renderTypography(journalText.value, localDesign(journalText.value, mapping));
+  currentVAMapping = mapping;
+  renderTypography(journalText.value, localDesign(journalText.value, mapping), mapping);
   analyzeTimer = setTimeout(analyzeText, 420);
 }
 
@@ -939,9 +1150,10 @@ function bindEvents() {
   intensityRange.addEventListener("input", () => {
     homeIntensity.textContent = `${intensityRange.value}%`;
     if (currentOverallMapping) {
-      renderTypography(journalText.value, recolorDesign(currentDesign, currentOverallMapping));
+      renderTypography(journalText.value, recolorDesign(currentDesign, currentOverallMapping), currentVAMapping);
     } else {
-      renderTypography(journalText.value, localDesign(journalText.value));
+      const localMapping = localVAMapping(journalText.value);
+      renderTypography(journalText.value, localDesign(journalText.value, localMapping), localMapping);
     }
     scheduleAnalysis();
   });
@@ -1019,7 +1231,7 @@ async function boot() {
   setupSpeechRecognition();
   renderChips("");
   renderPrompts(localEmotion("").prompts);
-  renderTypography(journalText.value, localDesign(journalText.value));
+  renderTypography(journalText.value, localDesign(journalText.value), localVAMapping(journalText.value));
   if (participantCode()) await loadParticipantEntries();
   else renderHome();
   scheduleAnalysis();

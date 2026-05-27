@@ -583,7 +583,44 @@ textarea:focus {
 }
 
 .glyph.emoji {
+  min-width: 1.02em;
+  margin: 0 0.06em;
+  border-radius: 0.42em;
+  padding: 0.02em 0.08em;
   font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
+  font-size: clamp(26px, calc(27px * var(--scale)), 58px);
+  line-height: 1.04;
+  transform-origin: center;
+}
+
+.glyph.emoji-rage,
+.glyph.emoji-anger,
+.glyph.emoji-anxiety,
+.glyph.emoji-fear {
+  box-shadow: 0 8px 18px rgba(220, 38, 38, 0.18);
+}
+
+.glyph.emoji-ecstatic,
+.glyph.emoji-activated,
+.glyph.emoji-spark,
+.glyph.emoji-pride {
+  box-shadow: 0 8px 18px rgba(245, 158, 11, 0.2);
+}
+
+.glyph.emoji-sadness,
+.glyph.emoji-despair,
+.glyph.emoji-lonely,
+.glyph.emoji-exhausted {
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.16);
+}
+
+.glyph.emoji-calm,
+.glyph.emoji-relaxed,
+.glyph.emoji-safe,
+.glyph.emoji-content,
+.glyph.emoji-warmth,
+.glyph.emoji-ease {
+  box-shadow: 0 8px 18px rgba(16, 185, 129, 0.16);
 }
 
 .anim-pulse-scale {

@@ -18,6 +18,10 @@ export type VADInput = {
   dominance?: number;
   confidence?: number;
   text?: string;
+  explicit_label?: string;
+  implicit_label?: string;
+  evidence?: string[];
+  source?: string;
 };
 
 export type EmotionLabelResult = {
@@ -56,6 +60,10 @@ export type VAMapping = {
 
 export type SegmentMapping = VAMapping & {
   text: string;
+  explicit_label?: string;
+  implicit_label?: string;
+  evidence?: string[];
+  source?: string;
 };
 
 export const NEUTRAL_COLOR = "#94A3B8";
@@ -350,6 +358,10 @@ export function mapSegments(segments: VADInput[] = []): { segments: SegmentMappi
   const mappedSegments = segments.map((segment) => ({
     ...mapVA(segment),
     text: String(segment.text || "").trim(),
+    explicit_label: segment.explicit_label,
+    implicit_label: segment.implicit_label,
+    evidence: segment.evidence,
+    source: segment.source,
   }));
 
   let weightedValence = 0;

@@ -285,6 +285,10 @@
     const mappedSegments = segments.map((segment) => ({
       ...mapVA(segment),
       text: String(segment.text || "").trim(),
+      explicit_label: segment.explicit_label,
+      implicit_label: segment.implicit_label,
+      evidence: segment.evidence,
+      source: segment.source,
     }));
 
     let weightedValence = 0;

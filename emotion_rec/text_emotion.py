@@ -107,6 +107,63 @@ def _contains_any(text: str, terms: list[str] | set[str]) -> bool:
     return any(term.lower() in lower for term in terms)
 
 
+NEGATION_PREFIXES = (
+    "不",
+    "没",
+    "沒",
+    "没有",
+    "沒有",
+    "未",
+    "无",
+    "無",
+    "并不",
+    "並不",
+    "不是",
+    "别",
+    "別",
+)
+
+
+def _is_negated_match(text: str, label: str, index: int) -> bool:
+    prefix = text[max(0, index - 4):index].lower()
+    return any(prefix.endswith(term.lower()) for term in NEGATION_PREFIXES)
+
+
+def _contains_unnegated_any(text: str, terms: list[str] | set[str]) -> bool:
+    lower = text.lower()
+    for term in sorted(terms, key=len, reverse=True):
+        term_lower = term.lower()
+        start = 0
+        while True:
+            index = lower.find(term_lower, start)
+            if index == -1:
+                break
+            if not _is_negated_match(text, term, index):
+                return True
+            start = index + len(term_lower)
+    return False
+
+
+def _lexicon_matches(text: str) -> list[dict[str, Any]]:
+    lower = text.lower()
+    matches: list[dict[str, Any]] = []
+    for item in sorted(EMOTION_LEXICON, key=lambda value: len(str(value.get("label", ""))), reverse=True):
+        label = str(item.get("label", ""))
+        if not label:
+            continue
+        label_lower = label.lower()
+        start = 0
+        while True:
+            index = lower.find(label_lower, start)
+            if index == -1:
+                break
+            if float(item.get("valence", 0.0)) <= 0 or not _is_negated_match(text, label, index):
+                matches.append(item)
+                break
+            start = index + len(label_lower)
+    return matches
+
+
 def _unique(items: list[str]) -> list[str]:
     seen = set()
     result = []
@@ -341,8 +398,13 @@ class TextEmotionAnalyzer:
             "受不了", "烦死", "煩死", "很烦", "很煩",
         }
         overwhelm_terms = {
-            "撑不住", "撐不住", "崩溃", "崩潰", "压力大", "壓力大", "太多了",
-            "喘不过来", "喘不過來", "快不行", "顶不住", "頂不住",
+            "撑不住", "撐不住", "崩溃", "崩潰", "压力", "壓力", "压力大", "壓力大",
+            "压力很大", "壓力很大", "压力非常大", "壓力非常大", "学习压力", "學習壓力",
+            "太多了", "喘不过来", "喘不過來", "快不行", "顶不住", "頂不住",
+        }
+        uncertainty_terms = {
+            "不知道该怎么办", "不知道該怎麼辦", "怎么办", "怎麼辦", "纠结", "糾結",
+            "要不要", "拿不准", "拿不準", "犹豫", "猶豫", "不知道选", "不知道選",
         }
         loneliness_terms = {
             "一个人", "一個人", "孤单", "孤單", "孤独", "孤獨", "没人陪",
@@ -356,13 +418,28 @@ class TextEmotionAnalyzer:
             "开心", "開心", "高兴", "高興", "期待", "兴奋", "興奮", "惊喜", "驚喜",
             "喜欢", "喜歡", "有希望",
         }
+        negated_mood_rules = [
+            ("很不开心", -0.52, -0.18, 0.78, "不高兴", "低落", "否定情绪词：很不开心"),
+            ("非常不开心", -0.56, -0.2, 0.8, "不高兴", "低落", "否定情绪词：非常不开心"),
+            ("不开心", -0.46, -0.16, 0.72, "不高兴", "低落", "否定情绪词：不开心"),
+            ("不高兴", -0.42, 0.15, 0.7, "不高兴", "不满", "否定情绪词：不高兴"),
+            ("不舒服", -0.4, 0.22, 0.66, "不安", "身体不适", "否定身体感受：不舒服"),
+            ("不满意", -0.36, 0.2, 0.64, "不高兴", "不满", "否定评价：不满意"),
+            ("不喜欢", -0.42, 0.18, 0.66, "不高兴", "抗拒", "否定偏好：不喜欢"),
+            ("不安全", -0.42, 0.48, 0.68, "不安", "警觉", "否定安全感：不安全"),
+        ]
 
         if _contains_any(text, contrast_terms):
             evidence.append("转折表达")
         if _contains_any(text, minimizer_terms):
             evidence.append("弱化表达")
 
-        if _contains_any(text, body_tension_terms):
+        negated_mood = next((rule for rule in negated_mood_rules if rule[0].lower() in text.lower()), None)
+
+        if negated_mood:
+            _, valence, arousal, confidence, explicit_label, implicit_label, reason = negated_mood
+            evidence.append(reason)
+        elif _contains_any(text, body_tension_terms):
             valence, arousal, confidence = -0.45, 0.65, 0.78
             explicit_label, implicit_label = "不安", "焦虑"
             evidence.append("身体紧绷")
@@ -370,6 +447,10 @@ class TextEmotionAnalyzer:
             valence, arousal, confidence = -0.62, 0.72, 0.76
             explicit_label, implicit_label = "紧绷", "压力过载"
             evidence.append("压力过载")
+        elif _contains_any(text, uncertainty_terms):
+            valence, arousal, confidence = -0.36, 0.48, 0.66
+            explicit_label, implicit_label = "不安", "纠结"
+            evidence.append("决策不确定")
         elif _contains_any(text, suppressed_anger_terms):
             valence, arousal, confidence = -0.68, 0.68, 0.74
             explicit_label, implicit_label = "恼火", "压抑的愤怒"
@@ -398,16 +479,16 @@ class TextEmotionAnalyzer:
             valence, arousal, confidence = -0.15, 0.25, 0.42
             explicit_label, implicit_label = "中性", "回避"
             evidence.append("否认式表达")
-        elif _contains_any(text, positive_calm_terms):
+        elif _contains_unnegated_any(text, positive_calm_terms):
             valence, arousal, confidence = 0.48, -0.48, 0.62
             explicit_label, implicit_label = "平静", "放松"
             evidence.append("积极低唤醒线索")
-        elif _contains_any(text, positive_energy_terms):
+        elif _contains_unnegated_any(text, positive_energy_terms):
             valence, arousal, confidence = 0.62, 0.52, 0.62
             explicit_label, implicit_label = "开心", "开心"
             evidence.append("积极高唤醒线索")
         else:
-            lexicon_matches = [item for item in EMOTION_LEXICON if item["label"] and item["label"] in text]
+            lexicon_matches = _lexicon_matches(text)
             if lexicon_matches:
                 weight = 1 / len(lexicon_matches)
                 valence = sum(float(item["valence"]) * weight for item in lexicon_matches)
@@ -527,6 +608,10 @@ class TextEmotionAnalyzer:
         classifier_confidence = float(classifier_result["confidence"])
         rule_has_evidence = bool(rule_result.evidence)
         rule_is_implicit = rule_result.implicit_label not in {"未明确", rule_result.explicit_label}
+        strong_negation = any(
+            evidence.startswith(("否定情绪词", "否定评价", "否定偏好", "否定安全感"))
+            for evidence in rule_result.evidence
+        )
 
         if rule_has_evidence and rule_result.confidence >= 0.6:
             rule_weight = 0.68 if rule_is_implicit else 0.6
@@ -535,14 +620,19 @@ class TextEmotionAnalyzer:
         else:
             rule_weight = 0.25
 
+        if strong_negation:
+            rule_weight = max(rule_weight, 0.86)
         if classifier_confidence < 0.45:
             rule_weight = max(rule_weight, 0.72)
         classifier_weight = 1 - rule_weight
+        if strong_negation and float(classifier_result["valence"]) > 0:
+            classifier_weight = min(classifier_weight, 0.08)
+            rule_weight = 1 - classifier_weight
 
         valence = rule_result.valence * rule_weight + classifier_result["valence"] * classifier_weight
         arousal = rule_result.arousal * rule_weight + classifier_result["arousal"] * classifier_weight
         confidence = max(rule_result.confidence, classifier_confidence * 0.92)
-        explicit_label = classifier_result["explicit_label"]
+        explicit_label = rule_result.explicit_label if strong_negation else classifier_result["explicit_label"]
         implicit_label = (
             rule_result.implicit_label
             if rule_result.implicit_label != "未明确"
