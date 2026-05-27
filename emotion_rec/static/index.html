@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>EmoMirror</title>
-    <link rel="stylesheet" href="/static/styles.css?v=20260526-va3" />
+    <link rel="stylesheet" href="/static/styles.css?v=20260527-data1" />
   </head>
   <body>
     <main class="app-shell">
@@ -27,6 +27,23 @@
           <span>Local mode</span>
         </label>
       </header>
+
+      <section class="participant-panel" aria-label="Research participant session">
+        <form class="participant-form" id="participantForm">
+          <label class="participant-code-control" for="participantCode">
+            <span>实验编号</span>
+            <input id="participantCode" type="text" placeholder="例如 P001" autocomplete="off" />
+          </label>
+          <label class="participant-consent">
+            <input id="participantConsent" type="checkbox" checked />
+            <span>同意保存日记和操作日志用于研究分析</span>
+          </label>
+          <button class="primary-button" type="submit" id="participantLogin">进入记录</button>
+          <button class="ghost-button" type="button" id="exportParticipantJson">导出 JSON</button>
+          <button class="ghost-button" type="button" id="exportParticipantCsv">导出 CSV</button>
+          <span class="participant-status" id="participantStatus">未连接实验编号，本机会先临时保存。</span>
+        </form>
+      </section>
 
       <section class="view is-active" id="homeView" aria-labelledby="homeTitle">
         <div class="home-hero">
@@ -52,7 +69,7 @@
           <article class="stat-card">
             <span>Entries</span>
             <strong id="entryCount">0</strong>
-            <small>saved locally</small>
+            <small id="entryStorageMode">local only</small>
           </article>
           <article class="stat-card">
             <span>Latest label</span>
@@ -162,7 +179,7 @@
       </section>
     </main>
 
-    <script src="/static/vaMapper.js?v=20260526-va3" defer></script>
-    <script src="/static/app.js?v=20260526-va3" defer></script>
+    <script src="/static/vaMapper.js?v=20260527-data1" defer></script>
+    <script src="/static/app.js?v=20260527-data1" defer></script>
   </body>
 </html>

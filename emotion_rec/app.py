@@ -7,9 +7,9 @@ from pathlib import Path
 import numpy as np
 import torch
 import torch.nn as nn
-from fastapi import FastAPI, UploadFile, File, Form, Query, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, Header, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 import transformers.utils as transformers_utils
@@ -37,6 +37,17 @@ try:
         split_text_segments,
     )
     from emotion_rec.text_emotion import analyze_text_emotion
+    from emotion_rec.storage import (
+        create_diary_entry,
+        export_all_csv,
+        export_all_data,
+        export_participant_csv,
+        export_participant_data,
+        get_or_create_participant,
+        init_database,
+        list_diary_entries,
+        log_usage_event,
+    )
 except ModuleNotFoundError:
     from va_mapper import (  # type: ignore
         EMOTION_LEXICON,
@@ -46,6 +57,17 @@ except ModuleNotFoundError:
         split_text_segments,
     )
     from text_emotion import analyze_text_emotion  # type: ignore
+    from storage import (  # type: ignore
+        create_diary_entry,
+        export_all_csv,
+        export_all_data,
+        export_participant_csv,
+        export_participant_data,
+        get_or_create_participant,
+        init_database,
+        list_diary_entries,
+        log_usage_event,
+    )
 
 # -----------------------------
 # LLM Configuration
@@ -55,6 +77,7 @@ LLM_API_KEY = os.getenv("LLM_API_KEY", "")
 LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o")
 LLM_TIMEOUT_SECONDS = float(os.getenv("LLM_TIMEOUT_SECONDS", "20"))
 VAD_SOURCE_RANGE = os.getenv("VAD_SOURCE_RANGE", "zero_one")
+ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "")
 
 # -----------------------------
 # Model definition
@@ -135,9 +158,43 @@ class TextAnalysisRequest(BaseModel):
     text: str = Field(default="", max_length=6000)
     intensity: float = Field(default=0.8, ge=0.0, le=1.0)
 
+
+class ParticipantSessionRequest(BaseModel):
+    participant_code: str = Field(min_length=2, max_length=64)
+    consent_version: str = Field(default="research-v1", max_length=64)
+
+
+class DiaryEntryRequest(BaseModel):
+    participant_code: str = Field(min_length=2, max_length=64)
+    raw_text: str = Field(default="", max_length=20000)
+    transcript_text: str = Field(default="", max_length=20000)
+    original_valence: float | None = None
+    original_arousal: float | None = None
+    original_label: str | None = Field(default=None, max_length=128)
+    final_valence: float | None = None
+    final_arousal: float | None = None
+    final_label: str | None = Field(default=None, max_length=128)
+    final_color: str | None = Field(default=None, max_length=16)
+    candidates_json: list | dict | None = None
+    text_emotion_json: dict | None = None
+    va_mapping_json: dict | None = None
+
+
+class UsageEventRequest(BaseModel):
+    participant_code: str = Field(min_length=2, max_length=64)
+    event_type: str = Field(min_length=1, max_length=80)
+    metadata_json: dict = Field(default_factory=dict)
+
+
 @app.on_event("startup")
 def _load():
     global processor, model
+    try:
+        init_database()
+        print("Database initialized.")
+    except Exception as e:
+        print(f"Database initialization warning: {e}")
+
     print(f"Loading model from: {MODEL_NAME_OR_PATH} using {device}...")
     try:
         processor = Wav2Vec2FeatureExtractor.from_pretrained(MODEL_NAME_OR_PATH)
@@ -734,6 +791,101 @@ def extract_acoustic_features(wav_path: str):
 # -----------------------------
 # Main Endpoint
 # -----------------------------
+
+
+def _storage_error(error: Exception) -> HTTPException:
+    return HTTPException(status_code=400, detail=str(error))
+
+
+def _check_admin_token(admin_token: str | None, x_admin_token: str | None):
+    token = admin_token or x_admin_token
+    if not ADMIN_TOKEN:
+        raise HTTPException(status_code=503, detail="ADMIN_TOKEN is not configured.")
+    if token != ADMIN_TOKEN:
+        raise HTTPException(status_code=403, detail="Invalid admin token.")
+
+
+@app.post("/participants/session")
+async def participant_session(payload: ParticipantSessionRequest):
+    try:
+        participant = get_or_create_participant(payload.participant_code, payload.consent_version)
+        log_usage_event(payload.participant_code, "session_start", {"consent_version": payload.consent_version})
+        return {"status": "success", "participant": participant}
+    except Exception as error:
+        raise _storage_error(error)
+
+
+@app.get("/participants/{participant_code}/diaries")
+async def participant_diaries(participant_code: str):
+    try:
+        return {"status": "success", "diary_entries": list_diary_entries(participant_code)}
+    except Exception as error:
+        raise _storage_error(error)
+
+
+@app.post("/diaries")
+async def save_diary_entry(payload: DiaryEntryRequest):
+    try:
+        payload_data = payload.model_dump() if hasattr(payload, "model_dump") else payload.dict()
+        entry = create_diary_entry(payload.participant_code, payload_data)
+        return {"status": "success", "diary_entry": entry}
+    except Exception as error:
+        raise _storage_error(error)
+
+
+@app.post("/usage-events")
+async def save_usage_event(payload: UsageEventRequest):
+    try:
+        event = log_usage_event(payload.participant_code, payload.event_type, payload.metadata_json)
+        return {"status": "success", "usage_event": event}
+    except Exception as error:
+        raise _storage_error(error)
+
+
+@app.get("/participants/{participant_code}/export.json")
+async def participant_export_json(participant_code: str):
+    try:
+        log_usage_event(participant_code, "participant_export_json", {})
+        return export_participant_data(participant_code)
+    except Exception as error:
+        raise _storage_error(error)
+
+
+@app.get("/participants/{participant_code}/export.csv")
+async def participant_export_csv(participant_code: str):
+    try:
+        log_usage_event(participant_code, "participant_export_csv", {})
+        csv_text = export_participant_csv(participant_code)
+        return Response(
+            content=csv_text,
+            media_type="text/csv; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="emomirror-{participant_code}.csv"'},
+        )
+    except Exception as error:
+        raise _storage_error(error)
+
+
+@app.get("/admin/export.json")
+async def admin_export_json(
+    admin_token: str | None = Query(default=None),
+    x_admin_token: str | None = Header(default=None),
+):
+    _check_admin_token(admin_token, x_admin_token)
+    return export_all_data()
+
+
+@app.get("/admin/export.csv")
+async def admin_export_csv(
+    admin_token: str | None = Query(default=None),
+    x_admin_token: str | None = Header(default=None),
+):
+    _check_admin_token(admin_token, x_admin_token)
+    return Response(
+        content=export_all_csv(),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="emomirror-export.csv"'},
+    )
+
 
 # --- 3. 核心路由控制器 (Controller) ---
 

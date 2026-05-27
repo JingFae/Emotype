@@ -27,6 +27,13 @@ const clearEntries = document.querySelector("#clearEntries");
 const voiceButton = document.querySelector("#voiceButton");
 const typingMode = document.querySelector("#typingMode");
 const voiceMode = document.querySelector("#voiceMode");
+const participantForm = document.querySelector("#participantForm");
+const participantCodeInput = document.querySelector("#participantCode");
+const participantConsent = document.querySelector("#participantConsent");
+const participantStatus = document.querySelector("#participantStatus");
+const exportParticipantJson = document.querySelector("#exportParticipantJson");
+const exportParticipantCsv = document.querySelector("#exportParticipantCsv");
+const entryStorageMode = document.querySelector("#entryStorageMode");
 
 const palette = {
   plum: "#5E5094",
@@ -48,6 +55,9 @@ let currentOverallMapping = null;
 let currentCandidates = [];
 let currentDesign = {};
 let isDraggingVA = false;
+let participant = JSON.parse(localStorage.getItem("emomirror.participant") || "null");
+let currentAnalysisPayload = {};
+let detectedOverallMapping = null;
 
 function vaMapper() {
   return window.VAMapper;
@@ -111,6 +121,137 @@ function switchView(targetId) {
 
 function setStatus(text) {
   analysisStatus.textContent = text;
+}
+
+function participantCode() {
+  return participant?.participant_code || "";
+}
+
+function setParticipantStatus(text) {
+  participantStatus.textContent = text;
+}
+
+function saveParticipant(nextParticipant) {
+  participant = nextParticipant;
+  if (participant) {
+    localStorage.setItem("emomirror.participant", JSON.stringify(participant));
+    participantCodeInput.value = participant.participant_code;
+    setParticipantStatus(`已连接实验编号 ${participant.participant_code}`);
+  } else {
+    localStorage.removeItem("emomirror.participant");
+    setParticipantStatus("未连接实验编号，本机会先临时保存。");
+  }
+}
+
+async function apiJson(url, options = {}) {
+  const response = await fetch(url, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
+    },
+  });
+  if (!response.ok) {
+    let message = "request failed";
+    try {
+      const data = await response.json();
+      message = data.detail || data.error || message;
+    } catch (error) {
+      message = response.statusText || message;
+    }
+    throw new Error(message);
+  }
+  return response.json();
+}
+
+function serverEntryToLocal(entry) {
+  const confidence = Number(entry.va_mapping_json?.overall?.confidence ?? 0);
+  return {
+    id: entry.id,
+    text: entry.raw_text || entry.transcript_text || "",
+    label: entry.final_label || entry.original_label || "中性",
+    valence: entry.final_valence,
+    arousal: entry.final_arousal,
+    color: entry.final_color,
+    quadrant: entry.va_mapping_json?.overall?.quadrant,
+    confidence: Math.round(confidence * 100),
+    date: entry.created_at ? new Date(entry.created_at).toLocaleString() : "",
+    synced: true,
+  };
+}
+
+async function loadParticipantEntries() {
+  if (!participantCode()) {
+    renderHome();
+    return;
+  }
+  try {
+    const data = await apiJson(`/participants/${encodeURIComponent(participantCode())}/diaries`);
+    entries = (data.diary_entries || []).map(serverEntryToLocal);
+    saveEntries();
+    renderHome();
+    setParticipantStatus(`已加载 ${participantCode()} 的历史记录`);
+  } catch (error) {
+    setParticipantStatus(`历史读取失败：${error.message}`);
+    renderHome();
+  }
+}
+
+function logUsageEvent(eventType, metadata = {}) {
+  if (!participantCode()) return;
+  fetch("/usage-events", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      participant_code: participantCode(),
+      event_type: eventType,
+      metadata_json: metadata,
+    }),
+  }).catch(() => {});
+}
+
+function downloadBlob(content, filename, type) {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+async function exportParticipant(format = "json") {
+  if (!participantCode()) {
+    const localBundle = {
+      participant: null,
+      diary_entries: entries,
+      usage_events: [],
+      exported_from: "localStorage",
+      exported_at: new Date().toISOString(),
+    };
+    downloadBlob(JSON.stringify(localBundle, null, 2), "emomirror-local-export.json", "application/json;charset=utf-8");
+    setParticipantStatus("已导出本地临时数据。");
+    return;
+  }
+
+  try {
+    const url = `/participants/${encodeURIComponent(participantCode())}/export.${format}`;
+    const response = await fetch(url);
+    if (!response.ok) throw new Error("export failed");
+    const content = format === "json"
+      ? JSON.stringify(await response.json(), null, 2)
+      : await response.text();
+    downloadBlob(
+      content,
+      `emomirror-${participantCode()}.${format}`,
+      format === "json" ? "application/json;charset=utf-8" : "text/csv;charset=utf-8",
+    );
+    setParticipantStatus(`已导出 ${format.toUpperCase()} 数据。`);
+  } catch (error) {
+    setParticipantStatus(`导出失败：${error.message}`);
+  }
 }
 
 function getIntensity() {
@@ -440,6 +581,8 @@ function normalizeAnalysisPayload(payload) {
 
 function applyAnalysis(payload) {
   const { emotion, vaMapping, overall } = normalizeAnalysisPayload(payload);
+  currentAnalysisPayload = payload;
+  detectedOverallMapping = overall;
   currentOverallMapping = overall;
   currentCandidates = buildEmotionCandidates(payload, overall, vaMapping);
   selectedLabel = emotion.primary;
@@ -477,6 +620,12 @@ function renderChips(activeLabel) {
     button.title = `V ${formatSigned(candidate.valence)} · A ${formatSigned(candidate.arousal)}`;
     button.addEventListener("click", () => {
       applyManualMapping(candidate);
+      logUsageEvent("label_candidate_selected", {
+        label: candidate.label,
+        valence: candidate.valence,
+        arousal: candidate.arousal,
+        distance: candidate.distance,
+      });
       setStatus("Label adjusted");
     });
     emotionChips.appendChild(button);
@@ -546,6 +695,7 @@ function saveEntries() {
 function renderHome() {
   entryCount.textContent = String(entries.length);
   homeIntensity.textContent = `${intensityRange.value}%`;
+  entryStorageMode.textContent = participantCode() ? `synced as ${participantCode()}` : "local only";
 
   if (entries.length) {
     const latest = entries[0];
@@ -587,7 +737,7 @@ function renderHome() {
   });
 }
 
-function saveCurrentEntry() {
+async function saveCurrentEntry() {
   const text = journalText.value.trim();
   if (!text) {
     setStatus("Nothing to save");
@@ -595,7 +745,8 @@ function saveCurrentEntry() {
   }
   const confidence = Math.round(Number(confidenceMeter.style.width.replace("%", "")) || 0);
   const mapping = currentOverallMapping || vaMapper().mapVA({ valence: 0, arousal: 0, confidence: 0 });
-  entries.unshift({
+  const original = detectedOverallMapping || mapping;
+  const localEntry = {
     text,
     label: selectedLabel || primaryEmotion.textContent,
     valence: mapping.valence,
@@ -604,11 +755,55 @@ function saveCurrentEntry() {
     quadrant: mapping.quadrant,
     confidence,
     date: new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date()),
-  });
+    synced: false,
+  };
+
+  if (participantCode()) {
+    try {
+      const data = await apiJson("/diaries", {
+        method: "POST",
+        body: JSON.stringify({
+          participant_code: participantCode(),
+          raw_text: text,
+          transcript_text: text,
+          original_valence: original.valence,
+          original_arousal: original.arousal,
+          original_label: original.label,
+          final_valence: mapping.valence,
+          final_arousal: mapping.arousal,
+          final_label: selectedLabel || mapping.label,
+          final_color: mapping.color,
+          candidates_json: currentCandidates,
+          text_emotion_json: currentAnalysisPayload.text_emotion || {},
+          va_mapping_json: {
+            ...(currentAnalysisPayload.va_mapping || {}),
+            final_override: {
+              valence: mapping.valence,
+              arousal: mapping.arousal,
+              label: selectedLabel || mapping.label,
+              color: mapping.color,
+              quadrant: mapping.quadrant,
+            },
+          },
+        }),
+      });
+      entries.unshift(serverEntryToLocal(data.diary_entry));
+      entries = entries.slice(0, 24);
+      saveEntries();
+      renderHome();
+      setStatus("Saved to research log");
+      return;
+    } catch (error) {
+      setStatus("Saved locally; sync failed");
+      setParticipantStatus(`保存到数据库失败：${error.message}`);
+    }
+  }
+
+  entries.unshift(localEntry);
   entries = entries.slice(0, 12);
   saveEntries();
   renderHome();
-  setStatus("Saved locally");
+  if (!participantCode()) setStatus("Saved locally");
 }
 
 function setupSpeechRecognition() {
@@ -696,7 +891,40 @@ function nudgeVA(deltaValence, deltaArousal) {
     arousal: clampNumber(base.arousal + deltaArousal),
     confidence: base.source_confidence ?? base.confidence ?? 0.8,
   }), { refreshCandidates: true });
+  logUsageEvent("va_coordinate_adjusted", {
+    valence: currentOverallMapping?.valence,
+    arousal: currentOverallMapping?.arousal,
+    label: currentOverallMapping?.label,
+    method: "keyboard",
+  });
   setStatus("Coordinate adjusted");
+}
+
+async function connectParticipant(event) {
+  event.preventDefault();
+  const code = participantCodeInput.value.trim();
+  if (!code) {
+    setParticipantStatus("请输入实验编号，例如 P001。");
+    return;
+  }
+  if (!participantConsent.checked) {
+    setParticipantStatus("需要先同意保存日记和操作日志，才能连接实验编号。");
+    return;
+  }
+  setParticipantStatus("正在连接实验编号...");
+  try {
+    const data = await apiJson("/participants/session", {
+      method: "POST",
+      body: JSON.stringify({
+        participant_code: code,
+        consent_version: "research-v1",
+      }),
+    });
+    saveParticipant(data.participant);
+    await loadParticipantEntries();
+  } catch (error) {
+    setParticipantStatus(`连接失败：${error.message}`);
+  }
 }
 
 function bindEvents() {
@@ -704,6 +932,9 @@ function bindEvents() {
     button.addEventListener("click", () => switchView(button.dataset.viewTarget));
   });
 
+  participantForm.addEventListener("submit", connectParticipant);
+  exportParticipantJson.addEventListener("click", () => exportParticipant("json"));
+  exportParticipantCsv.addEventListener("click", () => exportParticipant("csv"));
   journalText.addEventListener("input", scheduleAnalysis);
   intensityRange.addEventListener("input", () => {
     homeIntensity.textContent = `${intensityRange.value}%`;
@@ -720,6 +951,11 @@ function bindEvents() {
     if (!label) return;
     const base = currentOverallMapping || vaMapper().mapVA({ valence: 0, arousal: 0, confidence: 0.8 });
     applyManualMapping({ ...base, label }, { addToCandidates: true, custom: true });
+    logUsageEvent("custom_label_applied", {
+      label,
+      valence: currentOverallMapping?.valence,
+      arousal: currentOverallMapping?.arousal,
+    });
     setStatus("Custom label applied");
   });
   customEmotionLabel.addEventListener("keydown", (event) => {
@@ -738,6 +974,12 @@ function bindEvents() {
   });
   vaPlane.addEventListener("pointerup", () => {
     isDraggingVA = false;
+    logUsageEvent("va_coordinate_adjusted", {
+      valence: currentOverallMapping?.valence,
+      arousal: currentOverallMapping?.arousal,
+      label: currentOverallMapping?.label,
+      method: "pointer",
+    });
   });
   vaPlane.addEventListener("pointercancel", () => {
     isDraggingVA = false;
@@ -771,12 +1013,15 @@ function bindEvents() {
 
 async function boot() {
   await vaMapper().loadEmotionLexicon();
+  if (participant) saveParticipant(participant);
+  else saveParticipant(null);
   bindEvents();
   setupSpeechRecognition();
   renderChips("");
   renderPrompts(localEmotion("").prompts);
   renderTypography(journalText.value, localDesign(journalText.value));
-  renderHome();
+  if (participantCode()) await loadParticipantEntries();
+  else renderHome();
   scheduleAnalysis();
 }
 

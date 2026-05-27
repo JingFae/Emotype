@@ -159,6 +159,72 @@ button {
   accent-color: var(--plum);
 }
 
+.participant-panel {
+  margin: 0 0 18px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.66);
+  box-shadow: 0 14px 38px rgba(66, 55, 106, 0.08);
+}
+
+.participant-form {
+  display: grid;
+  grid-template-columns: minmax(160px, 220px) minmax(210px, 1fr) auto auto auto minmax(180px, 0.9fr);
+  align-items: end;
+  gap: 10px;
+}
+
+.participant-code-control {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.participant-code-control input {
+  min-height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 12px;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.8);
+  outline: none;
+}
+
+.participant-code-control input:focus {
+  border-color: rgba(94, 80, 148, 0.52);
+  box-shadow: 0 0 0 3px rgba(169, 158, 223, 0.22);
+}
+
+.participant-consent {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 760;
+  line-height: 1.35;
+}
+
+.participant-consent input {
+  accent-color: var(--plum);
+}
+
+.participant-status {
+  align-self: center;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 760;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .view {
   display: none;
 }
@@ -804,6 +870,7 @@ textarea:focus {
 
 @media (max-width: 1040px) {
   .topbar,
+  .participant-form,
   .home-hero,
   .journal-layout {
     grid-template-columns: 1fr;

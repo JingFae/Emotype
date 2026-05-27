@@ -5,6 +5,8 @@ EmoMirror is served as one Dockerized FastAPI web service:
 - `/` serves the EmoMirror web app.
 - `/analyze-text` returns text-based emotion mirror feedback for journaling.
 - `/predict` keeps the existing audio emotion API.
+- `/participants/session`, `/diaries`, and `/usage-events` store research sessions,
+  diary entries, and interaction logs.
 - `/healthz` is used for deployment health checks.
 
 ## Local Run
@@ -13,6 +15,9 @@ EmoMirror is served as one Dockerized FastAPI web service:
 pip install -r requirements.txt
 uvicorn emotion_rec.app:app --host 0.0.0.0 --port 8000
 ```
+
+Without `DATABASE_URL`, the app stores research data in
+`emotion_rec/emomirror_data.sqlite3` for local development.
 
 Open:
 
@@ -38,13 +43,25 @@ git push origin main
 https://dashboard.render.com/blueprint/new?repo=https://github.com/JingFae/Emotype
 ```
 
-3. Set this secret in Render:
+3. Set these secrets in Render:
 
 ```text
 LLM_API_KEY
+DATABASE_URL
+ADMIN_TOKEN
 ```
 
 If `LLM_API_KEY` is empty, EmoMirror still runs with local fallback emotion labels and typography styles.
+`DATABASE_URL` should point to your Render Postgres internal connection string.
+`ADMIN_TOKEN` protects the full research export endpoints:
+
+```text
+/admin/export.json
+/admin/export.csv
+```
+
+Participants can export their own diary and usage data from the web UI after
+entering their experiment code.
 
 ## Docker Run
 
