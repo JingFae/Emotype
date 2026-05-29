@@ -1,4 +1,4 @@
-# EmoType / EmoMirror
+# EmoBridge / EmoMirror
 
 EmoType 是一个面向“语音情绪识别 + 情绪文字日记 + 动态字体可视化”的实验项目。项目当前已经实现了基础的音频情绪 VAD 推理、文本情绪分析、V-A 坐标映射、动态字体渲染、日记数据保存与 Docker/Render 部署配置。
 
