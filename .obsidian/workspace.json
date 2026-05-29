@@ -183,6 +183,8 @@
   },
   "active": "8b36ef4b2cb7139c",
   "lastOpenFiles": [
+    "emotion_rec/__pycache__/storage.cpython-311.pyc",
+    "emotion_rec/storage.py",
     "emotion_rec/static-preview.err.log",
     "emotion_rec/static-preview.out.log",
     "emotion_rec/__pycache__/text_emotion.cpython-311.pyc",
@@ -199,9 +201,7 @@
     "DEPLOYMENT.md",
     "emotion_rec/static/app.js",
     "emotion_rec/static/styles.css",
-    "emotion_rec/static/index.html",
     "Design/色卡.jpg",
-    "色卡.jpg",
-    "Idea"
+    "色卡.jpg"
   ]
 }
