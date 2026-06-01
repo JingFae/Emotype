@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 import torch
 import torch.nn as nn
-from fastapi import FastAPI, UploadFile, File, Form, Header, Query, HTTPException
+from fastapi import Response, FastAPI, UploadFile, File, Form, Header, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -72,10 +72,14 @@ except ModuleNotFoundError:
 # -----------------------------
 # LLM Configuration
 # -----------------------------
-LLM_API_HOST = os.getenv("LLM_API_HOST", "api.chatanywhere.tech")
+LLM_API_SCHEME = os.getenv("LLM_API_SCHEME", "https").strip().lower()
+LLM_API_HOST = os.getenv("LLM_API_HOST", "api.chatanywhere.tech").strip()
+LLM_API_PORT = os.getenv("LLM_API_PORT", "").strip()
+LLM_API_PATH = os.getenv("LLM_API_PATH", "/v1/chat/completions").strip() or "/v1/chat/completions"
 LLM_API_KEY = os.getenv("LLM_API_KEY", "")
 LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o")
 LLM_TIMEOUT_SECONDS = float(os.getenv("LLM_TIMEOUT_SECONDS", "20"))
+LLM_ENABLED = os.getenv("LLM_ENABLED", "1").strip().lower() not in {"0", "false", "no", "off"}
 VAD_SOURCE_RANGE = os.getenv("VAD_SOURCE_RANGE", "zero_one")
 ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "")
 
@@ -219,15 +223,77 @@ def healthz():
 
 
 def _llm_headers():
+    if not LLM_ENABLED:
+        return None
+
     token = LLM_API_KEY.strip()
+
+    # Local Ollama does not need a real key, but OpenAI-compatible clients still expect Authorization.
+    if not token and LLM_API_SCHEME == "http" and LLM_API_HOST in {"127.0.0.1", "localhost"}:
+        token = "ollama"
+
     if not token:
         return None
+
     if not token.lower().startswith("bearer "):
         token = f"Bearer {token}"
+
     return {
         "Authorization": token,
         "Content-Type": "application/json",
     }
+
+
+def _llm_connection():
+    host = LLM_API_HOST.strip()
+    scheme = LLM_API_SCHEME.strip().lower() or "https"
+
+    # Allow users to accidentally pass full URL or host:port.
+    host = host.replace("https://", "").replace("http://", "").split("/")[0]
+
+    port = None
+    if LLM_API_PORT:
+        try:
+            port = int(LLM_API_PORT)
+        except ValueError:
+            print(f"Invalid LLM_API_PORT={LLM_API_PORT!r}; ignoring it.")
+            port = None
+
+    if ":" in host and port is None:
+        maybe_host, maybe_port = host.rsplit(":", 1)
+        if maybe_port.isdigit():
+            host = maybe_host
+            port = int(maybe_port)
+
+    if scheme == "http":
+        return http.client.HTTPConnection(host, port=port, timeout=LLM_TIMEOUT_SECONDS)
+
+    return http.client.HTTPSConnection(host, port=port, timeout=LLM_TIMEOUT_SECONDS)
+
+
+def _strip_llm_content(content: str) -> str:
+    content = str(content or "").strip()
+
+    # Qwen3 may emit thinking blocks; remove them before JSON parsing.
+    content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL | re.IGNORECASE).strip()
+
+    if "```" in content:
+        content = content.replace("```json", "").replace("```JSON", "").replace("```", "").strip()
+
+    return content
+
+
+def _extract_llm_content(response_json: dict) -> str:
+    if "choices" not in response_json:
+        preview = json.dumps(response_json, ensure_ascii=False)[:1000]
+        raise ValueError(
+            "LLM response missing choices. "
+            f"scheme={LLM_API_SCHEME}, host={LLM_API_HOST}, port={LLM_API_PORT}, "
+            f"model={LLM_MODEL}, response={preview}"
+        )
+
+    message = response_json["choices"][0].get("message") or {}
+    return _strip_llm_content(message.get("content", ""))
 
 
 def _style_for_va_mapping(va_mapping: dict):
@@ -562,7 +628,7 @@ def call_llm_typography_design(text: str, vad: dict, acoustics: dict):
         if not headers:
             return build_fallback_typography_design(text, vad, acoustics)
 
-        conn = http.client.HTTPSConnection(LLM_API_HOST, timeout=LLM_TIMEOUT_SECONDS)
+        conn = _llm_connection()
         payload = json.dumps({
             "model": LLM_MODEL,
             "messages": [
@@ -573,12 +639,12 @@ def call_llm_typography_design(text: str, vad: dict, acoustics: dict):
             "temperature": 0.75, 
             "response_format": { "type": "json_object" }
         })
-        conn.request("POST", "/v1/chat/completions", payload, headers)
+        conn.request("POST", LLM_API_PATH, payload, headers)
         res = conn.getresponse()
         data = res.read()
         
         response_json = json.loads(data.decode("utf-8"))
-        content = response_json['choices'][0]['message']['content']
+        content = _extract_llm_content(response_json)
         
         if "```" in content:
             content = content.replace("```json", "").replace("```", "").strip()
@@ -666,7 +732,7 @@ def call_llm_typography_design_2(text: str, vad: dict, acoustics: dict):
         if not headers:
             return build_fallback_typography_design(text, vad, acoustics)
 
-        conn = http.client.HTTPSConnection(LLM_API_HOST, timeout=LLM_TIMEOUT_SECONDS)
+        conn = _llm_connection()
         payload = json.dumps({
             "model": LLM_MODEL,
             "messages": [
@@ -676,12 +742,12 @@ def call_llm_typography_design_2(text: str, vad: dict, acoustics: dict):
             "temperature": 0.5, 
             "response_format": { "type": "json_object" }
         })
-        conn.request("POST", "/v1/chat/completions", payload, headers)
+        conn.request("POST", LLM_API_PATH, payload, headers)
         res = conn.getresponse()
         data = res.read()
         
         response_json = json.loads(data.decode("utf-8"))
-        content = response_json['choices'][0]['message']['content']
+        content = _extract_llm_content(response_json)
         
         if "```" in content:
             content = content.replace("```json", "").replace("```", "").strip()
@@ -910,6 +976,65 @@ def process_typography_request(text: str, vad: dict, acoustics: dict):
     print("🤖 MISS: Handing over to LLM...")
     # return call_llm_typography_design(text, vad, acoustics)
     return call_llm_typography_design_2(text, vad, acoustics)
+
+
+
+class BodySensationAdviceRequest(BaseModel):
+    participant_code: str | None = Field(default=None, max_length=64)
+    journal_text: str = Field(default="", max_length=20000)
+    selected_regions: list[dict] = Field(default_factory=list)
+    symptoms: list[dict] = Field(default_factory=list)
+    free_text: str = Field(default="", max_length=12000)
+    include_recent_diaries: bool = True
+    recent_diary_limit: int = Field(default=3, ge=0, le=10)
+
+
+@app.post("/body-sensation/advice")
+async def body_sensation_advice(payload: BodySensationAdviceRequest):
+    try:
+        from emotion_rec.body_sensation import generate_body_sensation_advice
+    except ModuleNotFoundError:
+        from body_sensation import generate_body_sensation_advice  # type: ignore
+
+    try:
+        payload_data = payload.model_dump() if hasattr(payload, "model_dump") else payload.dict()
+        result = generate_body_sensation_advice(payload_data)
+        return Response(
+            content=json.dumps(result, ensure_ascii=False),
+            media_type="application/json; charset=utf-8",
+        )
+    except Exception as error:
+        print(f"[body_sensation] endpoint failed: {error}")
+        return {
+            "status": "error",
+            "message": str(error),
+            "body_sensation": {
+                "selected_regions": [],
+                "symptoms": [],
+            },
+            "emotion_context": {},
+            "possible_links": [],
+            "advice": {
+                "source": "error_fallback",
+                "title": "暂时无法生成身体感受建议",
+                "summary": "后端处理时遇到问题，但这不影响你继续记录情绪日记。",
+                "steps": [
+                    "先记录症状出现的时间、持续多久、强度变化。",
+                    "如果症状明显或持续加重，请优先寻求专业医疗帮助。",
+                ],
+                "reflection_prompt": "可以稍后再试一次，或补充更多关于睡眠、饮食、咖啡因和压力事件的信息。",
+                "when_to_seek_help": [
+                    "胸痛、呼吸困难、晕厥、剧烈头痛、麻木无力、血便或高烧时，请及时就医。"
+                ],
+                "not_medical_diagnosis": True,
+            },
+            "safety": {
+                "risk_level": "unknown",
+                "red_flags": [],
+                "not_medical_diagnosis": True,
+            },
+            "logged": False,
+        }
 
 
 @app.post("/analyze-text")

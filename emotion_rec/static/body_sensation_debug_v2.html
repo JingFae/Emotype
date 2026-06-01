@@ -1,0 +1,452 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>Body Sensation Debug V2</title>
+  <style>
+    body { margin:0; font-family: Arial, "Microsoft YaHei", sans-serif; background:#f6f7fb; color:#172033; }
+    main { max-width:1120px; margin:0 auto; padding:24px 16px 60px; }
+    .card { background:#fff; border:1px solid #e5e7eb; border-radius:16px; padding:16px; margin-bottom:14px; }
+    .grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+    .buttons { display:flex; flex-wrap:wrap; gap:8px; margin:8px 0 12px; }
+    button { border:1px solid #d0d5dd; background:#fff; border-radius:999px; padding:8px 12px; cursor:pointer; }
+    button.selected { background:#111827; color:#fff; border-color:#111827; }
+    button.primary { border-radius:10px; background:#2563eb; color:#fff; border-color:#2563eb; font-weight:700; }
+    button.danger { border-radius:10px; background:#fee2e2; color:#991b1b; border-color:#fecaca; }
+    textarea, input, select { width:100%; box-sizing:border-box; border:1px solid #d0d5dd; border-radius:10px; padding:10px; font-size:14px; }
+    textarea { min-height:86px; resize:vertical; }
+    .pair { display:flex; justify-content:space-between; gap:10px; align-items:center; border:1px solid #e5e7eb; border-radius:12px; padding:10px; margin:8px 0; }
+    .hint { color:#667085; font-size:13px; line-height:1.6; }
+    .output { white-space:pre-wrap; background:#0b1020; color:#e5e7eb; border-radius:12px; padding:12px; max-height:520px; overflow:auto; font-family:Consolas, monospace; font-size:13px; }
+    li { margin:6px 0; line-height:1.6; }
+    @media(max-width:800px) { .grid { grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+<main>
+  <div class="card">
+    <h1>Body Sensation Debug V2</h1>
+    <div class="hint">先选部位，再选感受，点击“加入组合”。可以添加多个“部位-感受”组合，再统一提交给后端。</div>
+    <div class="hint"><a href="/">回到原页面</a></div>
+  </div>
+
+  <div class="grid">
+    <section class="card">
+      <h2>1. 基础输入</h2>
+      <label>Participant Code</label>
+      <input id="participantCode" value="P1234" />
+
+      <label>当前日记文本</label>
+      <textarea id="journalText">我今天起床晚了，午饭吃得很少，下午高强度学习之后有点头晕。</textarea>
+
+      <label>补充描述</label>
+      <textarea id="freeText">今天喝水也比较少，坐着学习了很久。</textarea>
+
+      <label>严重程度</label>
+      <select id="severity">
+        <option value="1">1 - 很轻</option>
+        <option value="2">2 - 较轻</option>
+        <option value="3" selected>3 - 中等</option>
+        <option value="4">4 - 明显</option>
+        <option value="5">5 - 很严重</option>
+      </select>
+
+      <label>持续时间</label>
+      <input id="duration" value="下午开始" />
+    </section>
+
+    <section class="card">
+      <h2>2. 选择部位</h2>
+      <div id="regionButtons" class="buttons"></div>
+
+      <h2>3. 选择感受</h2>
+      <div id="symptomButtons" class="buttons"></div>
+
+      <button class="primary" onclick="addPair()">加入组合</button>
+      <button onclick="clearPairs()">清空组合</button>
+
+      <h2>已选组合</h2>
+      <div id="pairsView" class="hint">暂无</div>
+    </section>
+  </div>
+
+  <div class="card">
+    <button class="primary" onclick="submitAdvice()">提交到 /body-sensation/advice</button>
+    <span class="hint">后端会综合当前输入和最近日记。</span>
+  </div>
+
+  <section id="adviceCard" class="card" style="display:none;">
+    <h2>建议展示</h2>
+    <div id="adviceView"></div>
+  </section>
+
+  <section class="card">
+    <h2>Raw JSON</h2>
+    <div id="rawOutput" class="output">Waiting...</div>
+  </section>
+</main>
+
+<script>
+const regions = [
+  {
+    "id": "head",
+    "label": "头部"
+  },
+  {
+    "id": "eyes",
+    "label": "眼部"
+  },
+  {
+    "id": "ears",
+    "label": "耳部"
+  },
+  {
+    "id": "nose_sinus",
+    "label": "鼻腔/鼻窦"
+  },
+  {
+    "id": "mouth_jaw",
+    "label": "口腔/下颌"
+  },
+  {
+    "id": "throat",
+    "label": "咽喉"
+  },
+  {
+    "id": "chest",
+    "label": "胸口/呼吸"
+  },
+  {
+    "id": "heart",
+    "label": "心跳/心前区"
+  },
+  {
+    "id": "shoulder_neck",
+    "label": "肩颈"
+  },
+  {
+    "id": "upper_back",
+    "label": "上背部"
+  },
+  {
+    "id": "lower_back",
+    "label": "腰背"
+  },
+  {
+    "id": "stomach",
+    "label": "胃部/上腹"
+  },
+  {
+    "id": "abdomen",
+    "label": "腹部/肠胃"
+  },
+  {
+    "id": "lower_abdomen_pelvis",
+    "label": "下腹/盆腔"
+  },
+  {
+    "id": "skin",
+    "label": "皮肤"
+  },
+  {
+    "id": "hands",
+    "label": "手部"
+  },
+  {
+    "id": "legs",
+    "label": "腿部"
+  },
+  {
+    "id": "whole_body",
+    "label": "全身"
+  }
+];
+const symptoms = [
+  {
+    "id": "headache",
+    "label": "头疼"
+  },
+  {
+    "id": "dizziness",
+    "label": "头晕"
+  },
+  {
+    "id": "brain_fog",
+    "label": "脑雾/注意力涣散"
+  },
+  {
+    "id": "eye_strain",
+    "label": "眼疲劳"
+  },
+  {
+    "id": "blurred_vision",
+    "label": "视物模糊"
+  },
+  {
+    "id": "dry_eyes",
+    "label": "眼干"
+  },
+  {
+    "id": "ear_ringing",
+    "label": "耳鸣"
+  },
+  {
+    "id": "nasal_congestion",
+    "label": "鼻塞"
+  },
+  {
+    "id": "jaw_tension",
+    "label": "下颌紧绷/咬牙"
+  },
+  {
+    "id": "throat_tightness",
+    "label": "喉咙紧"
+  },
+  {
+    "id": "dry_throat",
+    "label": "嗓子干"
+  },
+  {
+    "id": "chest_tightness",
+    "label": "胸闷"
+  },
+  {
+    "id": "palpitation",
+    "label": "心跳过快/心慌"
+  },
+  {
+    "id": "shortness_of_breath",
+    "label": "呼吸困难/气短"
+  },
+  {
+    "id": "stomach_cramp",
+    "label": "胃痉挛/胃痛"
+  },
+  {
+    "id": "acid_reflux",
+    "label": "反酸/烧心"
+  },
+  {
+    "id": "appetite_loss",
+    "label": "食欲下降"
+  },
+  {
+    "id": "nausea",
+    "label": "恶心"
+  },
+  {
+    "id": "diarrhea",
+    "label": "腹泻"
+  },
+  {
+    "id": "constipation",
+    "label": "便秘"
+  },
+  {
+    "id": "bloating",
+    "label": "腹胀"
+  },
+  {
+    "id": "lower_abdominal_cramp",
+    "label": "下腹痛/小腹坠胀"
+  },
+  {
+    "id": "menstrual_cramps",
+    "label": "经期腹痛/周期相关不适"
+  },
+  {
+    "id": "muscle_tension",
+    "label": "肌肉紧绷"
+  },
+  {
+    "id": "back_pain",
+    "label": "背痛/腰酸"
+  },
+  {
+    "id": "hand_shaking",
+    "label": "手抖"
+  },
+  {
+    "id": "cold_hands_feet",
+    "label": "手脚冰凉"
+  },
+  {
+    "id": "numbness",
+    "label": "麻木"
+  },
+  {
+    "id": "sweating",
+    "label": "出汗/冷汗"
+  },
+  {
+    "id": "fatigue",
+    "label": "疲惫/乏力"
+  },
+  {
+    "id": "sleepiness",
+    "label": "困倦"
+  },
+  {
+    "id": "insomnia",
+    "label": "失眠/入睡困难"
+  },
+  {
+    "id": "restlessness",
+    "label": "坐立不安"
+  },
+  {
+    "id": "skin_itching",
+    "label": "皮肤瘙痒"
+  }
+];
+
+let selectedRegion = regions[0];
+let selectedSymptom = symptoms[1];
+let pairs = [];
+
+function renderButtons() {
+  const regionBox = document.getElementById("regionButtons");
+  const symptomBox = document.getElementById("symptomButtons");
+  regionBox.innerHTML = "";
+  symptomBox.innerHTML = "";
+
+  regions.forEach(item => {
+    const btn = document.createElement("button");
+    btn.textContent = item.label + " / " + item.id;
+    btn.className = selectedRegion.id === item.id ? "selected" : "";
+    btn.onclick = () => { selectedRegion = item; renderButtons(); };
+    regionBox.appendChild(btn);
+  });
+
+  symptoms.forEach(item => {
+    const btn = document.createElement("button");
+    btn.textContent = item.label + " / " + item.id;
+    btn.className = selectedSymptom.id === item.id ? "selected" : "";
+    btn.onclick = () => { selectedSymptom = item; renderButtons(); };
+    symptomBox.appendChild(btn);
+  });
+}
+
+function renderPairs() {
+  const box = document.getElementById("pairsView");
+  if (!pairs.length) {
+    box.textContent = "暂无";
+    return;
+  }
+  box.innerHTML = pairs.map((p, index) => `
+    <div class="pair">
+      <div>
+        <b>${index + 1}. ${p.region.label}</b> → ${p.symptom.label}
+        <div class="hint">severity=${p.severity}, duration=${p.duration}</div>
+      </div>
+      <button class="danger" onclick="removePair(${index})">删除</button>
+    </div>
+  `).join("");
+}
+
+function addPair() {
+  const severity = Number(document.getElementById("severity").value);
+  const duration = document.getElementById("duration").value.trim();
+  pairs.push({
+    region: selectedRegion,
+    symptom: selectedSymptom,
+    severity,
+    duration
+  });
+  renderPairs();
+}
+
+function removePair(index) {
+  pairs.splice(index, 1);
+  renderPairs();
+}
+
+function clearPairs() {
+  pairs = [];
+  renderPairs();
+}
+
+function uniqueRegionsFromPairs() {
+  const map = new Map();
+  pairs.forEach(p => map.set(p.region.id, { id: p.region.id, label: p.region.label }));
+  return Array.from(map.values());
+}
+
+function symptomsFromPairs() {
+  return pairs.map(p => ({
+    region_id: p.region.id,
+    label: p.symptom.label,
+    severity: p.severity,
+    duration: p.duration
+  }));
+}
+
+function renderAdvice(data) {
+  const box = document.getElementById("adviceView");
+  const card = document.getElementById("adviceCard");
+  const advice = data.advice || {};
+  const links = data.possible_links || [];
+  const safety = data.safety || {};
+  const context = data.emotion_context || {};
+
+  box.innerHTML = `
+    <h3>${advice.title || ""}</h3>
+    <p>${advice.summary || ""}</p>
+    ${advice.state_reading ? `<div style="padding:12px;border-radius:12px;background:#f8fafc;margin:10px 0;line-height:1.7;">${advice.state_reading}</div>` : ""}
+    <div class="hint">
+      情绪：${context.primary_label || "-"} |
+      象限：${context.quadrant || "-"} |
+      建议来源：${advice.source || "-"}
+    </div>
+
+    <h3>身体-情绪线索</h3>
+    <ul>${links.map(x => `<li><b>${x.label || x.type}</b>：${x.description || ""}</li>`).join("")}</ul>
+
+    <h3>可尝试步骤</h3>
+    <ol>${(advice.steps || []).map(x => `<li>${x}</li>`).join("")}</ol>
+
+    <h3>继续记录提示</h3>
+    <p>${advice.reflection_prompt || ""}</p>
+
+    ${safety.risk_level === "high" ? `<h3>风险提示</h3><ul>${(safety.red_flags || []).map(x => `<li>${x}</li>`).join("")}</ul>` : ""}
+  `;
+  card.style.display = "block";
+}
+
+async function submitAdvice() {
+  if (!pairs.length) {
+    addPair();
+  }
+
+  const payload = {
+    participant_code: document.getElementById("participantCode").value.trim(),
+    journal_text: document.getElementById("journalText").value.trim(),
+    selected_regions: uniqueRegionsFromPairs(),
+    symptoms: symptomsFromPairs(),
+    free_text: document.getElementById("freeText").value.trim(),
+    include_recent_diaries: true,
+    recent_diary_limit: 5
+  };
+
+  document.getElementById("rawOutput").textContent = "Loading...";
+  document.getElementById("adviceCard").style.display = "none";
+
+  try {
+    const response = await fetch("/body-sensation/advice", {
+      method: "POST",
+      headers: { "Content-Type": "application/json; charset=utf-8" },
+      body: JSON.stringify(payload)
+    });
+    const data = await response.json();
+    document.getElementById("rawOutput").textContent = JSON.stringify(data, null, 2);
+    renderAdvice(data);
+  } catch (error) {
+    document.getElementById("rawOutput").textContent = String(error && error.stack ? error.stack : error);
+  }
+}
+
+renderButtons();
+renderPairs();
+</script>
+</body>
+</html>
