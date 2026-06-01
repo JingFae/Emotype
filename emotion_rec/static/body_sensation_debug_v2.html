@@ -12,6 +12,10 @@
     button { border:1px solid #d0d5dd; background:#fff; border-radius:999px; padding:8px 12px; cursor:pointer; }
     button.selected { background:#111827; color:#fff; border-color:#111827; }
     button.primary { border-radius:10px; background:#2563eb; color:#fff; border-color:#2563eb; font-weight:700; }
+    button.loading { background:#64748b; border-color:#64748b; color:#fff; cursor:wait; }
+    button.done { background:#16a34a; border-color:#16a34a; color:#fff; }
+    button.error { background:#dc2626; border-color:#dc2626; color:#fff; }
+    button:disabled { opacity:0.8; cursor:not-allowed; }
     button.danger { border-radius:10px; background:#fee2e2; color:#991b1b; border-color:#fecaca; }
     textarea, input, select { width:100%; box-sizing:border-box; border:1px solid #d0d5dd; border-radius:10px; padding:10px; font-size:14px; }
     textarea { min-height:86px; resize:vertical; }
@@ -29,6 +33,20 @@
     <div class="hint">先选部位，再选感受，点击“加入组合”。可以添加多个“部位-感受”组合，再统一提交给后端。</div>
     <div class="hint"><a href="/">回到原页面</a></div>
   </div>
+
+  
+  <section class="card" id="recentDiariesPanel">
+    <h2>0. 最近日记查看</h2>
+    <div class="hint">
+      这里用于调试：你可以回顾最近多条日记，但不需要选择哪一条作为身体不适的原因。提交时，后端会综合最近日记和本次身体感受，让模型自己判断哪些线索可能相关。
+    </div>
+    <div style="margin:10px 0;">
+      <button onclick="loadRecentDiaries()">加载最近日记</button>
+      <span id="diaryStatus" class="hint">尚未加载</span>
+    </div>
+    <div id="diaryTabs" class="buttons"></div>
+    <textarea id="diaryPreview" placeholder="点击某条日记后在这里预览；这里只用于回顾，不代表选择原因" style="min-height:90px;"></textarea>
+  </section>
 
   <div class="grid">
     <section class="card">
@@ -71,8 +89,8 @@
   </div>
 
   <div class="card">
-    <button class="primary" onclick="submitAdvice()">提交到 /body-sensation/advice</button>
-    <span class="hint">后端会综合当前输入和最近日记。</span>
+    <button id="submitAdviceBtn" class="primary" onclick="submitAdvice()">提交到 /body-sensation/advice</button>
+    <span id="submitStatus" class="hint">后端会综合本次身体感受和最近多条日记。</span>
   </div>
 
   <section id="adviceCard" class="card" style="display:none;">
@@ -354,6 +372,7 @@ function addPair() {
     duration
   });
   renderPairs();
+loadRecentDiaries();
 }
 
 function removePair(index) {
@@ -413,6 +432,45 @@ function renderAdvice(data) {
   card.style.display = "block";
 }
 
+
+function setSubmitState(state, message) {
+  const btn = document.getElementById("submitAdviceBtn");
+  const status = document.getElementById("submitStatus");
+  if (!btn || !status) return;
+
+  btn.classList.remove("loading", "done", "error");
+
+  if (state === "loading") {
+    btn.disabled = true;
+    btn.classList.add("loading");
+    btn.textContent = "生成中，请稍等...";
+    status.textContent = message || "正在调用后端和模型，可能需要几秒。";
+  } else if (state === "done") {
+    btn.disabled = false;
+    btn.classList.add("done");
+    btn.textContent = "生成完成";
+    status.textContent = message || "建议已生成。可以继续调整输入后再次提交。";
+    setTimeout(() => {
+      btn.classList.remove("done");
+      btn.textContent = "提交到 /body-sensation/advice";
+    }, 1600);
+  } else if (state === "error") {
+    btn.disabled = false;
+    btn.classList.add("error");
+    btn.textContent = "请求失败，可重试";
+    status.textContent = message || "请求失败，请查看 Raw JSON 或后端日志。";
+    setTimeout(() => {
+      btn.classList.remove("error");
+      btn.textContent = "提交到 /body-sensation/advice";
+    }, 2200);
+  } else {
+    btn.disabled = false;
+    btn.textContent = "提交到 /body-sensation/advice";
+    status.textContent = message || "后端会综合本次身体感受和最近多条日记。";
+  }
+}
+
+
 async function submitAdvice() {
   if (!pairs.length) {
     addPair();
@@ -430,6 +488,7 @@ async function submitAdvice() {
 
   document.getElementById("rawOutput").textContent = "Loading...";
   document.getElementById("adviceCard").style.display = "none";
+  setSubmitState("loading", "正在生成建议。Qwen 本地模型可能需要几秒。");
 
   try {
     const response = await fetch("/body-sensation/advice", {
@@ -440,10 +499,85 @@ async function submitAdvice() {
     const data = await response.json();
     document.getElementById("rawOutput").textContent = JSON.stringify(data, null, 2);
     renderAdvice(data);
+    const source = data && data.advice ? data.advice.source : "-";
+    setSubmitState("done", `建议已生成。来源：${source}`);
   } catch (error) {
     document.getElementById("rawOutput").textContent = String(error && error.stack ? error.stack : error);
+    setSubmitState("error", "请求失败。请检查后端是否仍在运行。");
   }
 }
+
+
+let loadedDiaries = [];
+
+function getDiaryText(entry) {
+  if (!entry) return "";
+  return entry.raw_text || entry.transcript_text || entry.text || entry.journal_text || "";
+}
+
+function getDiaryLabel(entry, index) {
+  const time = entry.created_at || entry.updated_at || "";
+  const label = entry.final_label || entry.emotion_label || entry.label || "";
+  const text = getDiaryText(entry);
+  const preview = text.length > 18 ? text.slice(0, 18) + "..." : text;
+  return `${index + 1}. ${label ? "[" + label + "] " : ""}${preview || time || "entry"}`;
+}
+
+async function loadRecentDiaries() {
+  const code = document.getElementById("participantCode").value.trim();
+  const status = document.getElementById("diaryStatus");
+  const tabs = document.getElementById("diaryTabs");
+  const preview = document.getElementById("diaryPreview");
+
+  if (!code) {
+    status.textContent = "请先填写 participant_code";
+    return;
+  }
+
+  status.textContent = "Loading...";
+  tabs.innerHTML = "";
+  preview.value = "";
+
+  try {
+    const response = await fetch(`/participants/${encodeURIComponent(code)}/diaries`);
+    const data = await response.json();
+
+    loadedDiaries = Array.isArray(data)
+      ? data
+      : (data.diary_entries || data.diaries || data.entries || data.items || []);
+
+    status.textContent = `已加载 ${loadedDiaries.length} 条`;
+
+    if (!loadedDiaries.length) {
+      tabs.innerHTML = '<span class="hint">没有找到该 participant 的日记</span>';
+      return;
+    }
+
+    loadedDiaries.forEach((entry, index) => {
+      const btn = document.createElement("button");
+      btn.textContent = getDiaryLabel(entry, index);
+      btn.onclick = () => {
+        document.querySelectorAll("#diaryTabs button").forEach(x => x.classList.remove("selected"));
+        btn.classList.add("selected");
+        preview.value = getDiaryText(entry);
+
+        const existing = document.getElementById("useDiaryButtonBox");
+        if (existing) existing.remove();
+
+        const box = document.createElement("div");
+        box.id = "useDiaryButtonBox";
+        box.style.marginTop = "8px";
+        box.className = "hint";
+        box.textContent = "这条日记仅用于回顾。提交时不需要选择原因，后端会综合最近日记。";
+        preview.parentNode.insertBefore(box, preview.nextSibling);
+      };
+      tabs.appendChild(btn);
+    });
+  } catch (error) {
+    status.textContent = "加载失败：" + String(error);
+  }
+}
+
 
 renderButtons();
 renderPairs();
