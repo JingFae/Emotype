@@ -989,6 +989,12 @@ class BodySensationAdviceRequest(BaseModel):
     recent_diary_limit: int = Field(default=3, ge=0, le=10)
 
 
+
+@app.get("/body-sensation")
+async def body_sensation_page():
+    page_path = Path(__file__).resolve().parent / "static" / "body_sensation.html"
+    return FileResponse(page_path)
+
 @app.post("/body-sensation/advice")
 async def body_sensation_advice(payload: BodySensationAdviceRequest):
     try:

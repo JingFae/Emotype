@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <title>Body Sensation Debug V2</title>
+  <title>身体感受</title>
   <style>
     body { margin:0; font-family: Arial, "Microsoft YaHei", sans-serif; background:#f6f7fb; color:#172033; }
     main { max-width:1120px; margin:0 auto; padding:24px 16px 60px; }
@@ -29,16 +29,16 @@
 <body>
 <main>
   <div class="card">
-    <h1>Body Sensation Debug V2</h1>
-    <div class="hint">先选部位，再选感受，点击“加入组合”。可以添加多个“部位-感受”组合，再统一提交给后端。</div>
-    <div class="hint"><a href="/">回到原页面</a></div>
+    <h1>身体感受</h1>
+    <div class="hint">选择身体不适的部位和感受，系统会结合最近日记，生成温和、具体的缓解提示。</div>
+    <div class="hint"><a href="/">返回情绪日记</a></div>
   </div>
 
   
   <section class="card" id="recentDiariesPanel">
-    <h2>0. 最近日记查看</h2>
+    <h2>最近日记回顾</h2>
     <div class="hint">
-      这里用于调试：你可以回顾最近多条日记，但不需要选择哪一条作为身体不适的原因。提交时，后端会综合最近日记和本次身体感受，让模型自己判断哪些线索可能相关。
+      你可以回顾最近多条日记，但不需要判断是哪一条导致了身体不适。系统会综合最近日记和本次身体感受，判断哪些线索可能相关。
     </div>
     <div style="margin:10px 0;">
       <button onclick="loadRecentDiaries()">加载最近日记</button>
@@ -89,8 +89,8 @@
   </div>
 
   <div class="card">
-    <button id="submitAdviceBtn" class="primary" onclick="submitAdvice()">提交到 /body-sensation/advice</button>
-    <span id="submitStatus" class="hint">后端会综合本次身体感受和最近多条日记。</span>
+    <button id="submitAdviceBtn" class="primary" onclick="submitAdvice()">生成身体感受建议</button>
+    <span id="submitStatus" class="hint">系统会综合本次身体感受和最近多条日记。</span>
   </div>
 
   <section id="adviceCard" class="card" style="display:none;">
@@ -98,8 +98,8 @@
     <div id="adviceView"></div>
   </section>
 
-  <section class="card">
-    <h2>Raw JSON</h2>
+  <section class="card" style="display:none;">
+    <h2>开发调试信息</h2>
     <div id="rawOutput" class="output">Waiting...</div>
   </section>
 </main>
@@ -452,21 +452,21 @@ function setSubmitState(state, message) {
     status.textContent = message || "建议已生成。可以继续调整输入后再次提交。";
     setTimeout(() => {
       btn.classList.remove("done");
-      btn.textContent = "提交到 /body-sensation/advice";
+      btn.textContent = "生成身体感受建议";
     }, 1600);
   } else if (state === "error") {
     btn.disabled = false;
     btn.classList.add("error");
     btn.textContent = "请求失败，可重试";
-    status.textContent = message || "请求失败，请查看 Raw JSON 或后端日志。";
+    status.textContent = message || "请求失败，请查看 开发调试信息 或后端日志。";
     setTimeout(() => {
       btn.classList.remove("error");
-      btn.textContent = "提交到 /body-sensation/advice";
+      btn.textContent = "生成身体感受建议";
     }, 2200);
   } else {
     btn.disabled = false;
-    btn.textContent = "提交到 /body-sensation/advice";
-    status.textContent = message || "后端会综合本次身体感受和最近多条日记。";
+    btn.textContent = "生成身体感受建议";
+    status.textContent = message || "系统会综合本次身体感受和最近多条日记。";
   }
 }
 
