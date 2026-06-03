@@ -1,0 +1,78 @@
+.venv/
+.env
+.env.*
+
+__pycache__/
+*.py[cod]
+*.pyo
+
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+node_modules/
+dist/
+build/
+
+*.log
+uvicorn.*.log
+
+*.pem
+*.key
+
+.DS_Store
+Thumbs.db
+
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Node
+node_modules/
+
+# Database
+*.sqlite3
+*.db
+
+# Certs / keys
+*.pem
+*.key
+
+# Logs / cache
+*.log
+.cache/
+outputs/
+
+# IDE / editor
+.idea/
+.vscode/
+.obsidian/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+venv/
+.venv/
+
+# Node
+node_modules/
+
+# Database
+*.sqlite3
+*.db
+
+# Certs / keys
+*.pem
+*.key
+
+# Logs / cache
+*.log
+.cache/
+outputs/
+
+# Nested git backup
+.git_backup/

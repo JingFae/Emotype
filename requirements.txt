@@ -1,0 +1,39 @@
+# ==========================================
+# Emotion Recognition System Dependencies
+# ==========================================
+
+# Core Deep Learning Framework
+torch>=2.0.0
+torchvision>=0.15.0
+torchaudio>=2.0.0
+
+# Hugging Face Transformers
+transformers>=4.35.0
+sentence-transformers>=3.0.0
+
+# Web Framework
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+sqlalchemy>=2.0.0
+psycopg[binary]>=3.1.0
+
+# Audio Processing
+librosa>=0.10.0
+soundfile>=0.12.0
+pydub>=0.25.1
+
+# Numerical Computing
+numpy>=1.24.0
+typing_extensions>=4.12.0
+
+# Optional: For visualization and monitoring
+matplotlib>=3.8.0
+plotly>=5.17.0
+
+# Optional: For API testing and development
+requests>=2.31.0
+python-multipart>=0.0.6
+
+# Optional: For production deployment
+gunicorn>=21.2.0
+python-dotenv>=1.0.0
