@@ -388,8 +388,22 @@ def _json_from_llm_content(content: str) -> dict | None:
 
 
 def _safe_list(value, limit: int = 8) -> list:
+    def normalize_item(item):
+        if isinstance(item, dict):
+            item = (
+                item.get("label")
+                or item.get("name")
+                or item.get("emotion")
+                or item.get("question")
+                or item.get("text")
+                or item.get("summary")
+            )
+        text_value = str(item or "").strip()
+        return text_value or None
+
     if isinstance(value, list):
-        return [item for item in value if item not in (None, "")][:limit]
+        normalized = [normalize_item(item) for item in value]
+        return [item for item in normalized if item][:limit]
     if isinstance(value, str) and value.strip():
         return [value.strip()]
     return []
@@ -1225,6 +1239,8 @@ async def reflect_diary_by_date(diary_date: str, payload: DiaryReflectRequest | 
         code = _diary_participant_code(payload.participant_code if payload else None)
         diary = get_formal_diary_by_date(code, date_text)
         content = str(diary.get("content") or "")
+        if not content.strip():
+            raise HTTPException(status_code=400, detail="Diary content is empty.")
         emotion_context = _build_diary_emotion_context(content)
         context_items = list_diary_context(code, date_text)
         context_items = _filter_diary_context_for_sources(context_items, diary.get("source_entry_ids_json") or [])
@@ -1256,6 +1272,8 @@ async def reflect_diary_by_date(diary_date: str, payload: DiaryReflectRequest | 
             "context_records_used": context_items,
             "llm_used": isinstance(llm_reflection, dict),
         }
+    except HTTPException:
+        raise
     except Exception as error:
         raise _storage_error(error)
 

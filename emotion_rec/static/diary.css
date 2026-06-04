@@ -3,13 +3,12 @@
   --diary-panel: rgba(255, 255, 255, 0.9);
   --diary-shadow: 0 10px 30px rgba(41, 37, 36, 0.08);
   --reflection-color: #94A3B8;
+  --diary-emotion-bg: rgba(148, 163, 184, 0.12);
 }
 
 .diary-page {
   background:
-    radial-gradient(ellipse 80% 50% at 0% 0%, rgba(245, 158, 11, 0.16), transparent 58%),
-    radial-gradient(ellipse 72% 54% at 100% 5%, rgba(59, 130, 246, 0.12), transparent 55%),
-    radial-gradient(ellipse 70% 50% at 50% 110%, rgba(16, 185, 129, 0.16), transparent 58%),
+    linear-gradient(180deg, var(--diary-emotion-bg), rgba(255, 251, 239, 0.88) 34%, rgba(248, 250, 252, 0.96) 100%),
     #fdfaf4;
 }
 
@@ -338,6 +337,14 @@
   gap: 10px;
 }
 
+.detail-label {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+  margin-bottom: 6px;
+}
+
 .color-swatch {
   width: 34px;
   height: 34px;
@@ -350,6 +357,7 @@
 
 .diary-chip-row {
   gap: 6px;
+  min-height: 30px;
 }
 
 .diary-chip-row .emotion-chip {

@@ -37,7 +37,9 @@ const els = {
   vaHandle: document.getElementById("diaryVAHandle"),
   colorSwatch: document.getElementById("emotionColorSwatch"),
   colorName: document.getElementById("emotionColorName"),
+  secondaryEmotionChips: document.getElementById("secondaryEmotionChips"),
   fineEmotionChips: document.getElementById("fineEmotionChips"),
+  bodySignalChips: document.getElementById("bodySignalChips"),
   questions: document.getElementById("reflectionQuestions"),
   smallAction: document.getElementById("smallActionSuggestion"),
 };
@@ -51,6 +53,7 @@ const state = {
   dirty: false,
   hydrating: false,
   saving: false,
+  savePromise: null,
   reflecting: false,
   recognition: null,
   listening: false,
@@ -178,6 +181,7 @@ function setVA(valence = 0, arousal = 0, color = "#94A3B8") {
   const x = ((v + 1) / 2) * 100;
   const y = ((1 - a) / 2) * 100;
   document.documentElement.style.setProperty("--reflection-color", color || "#94A3B8");
+  document.body.style.setProperty("--diary-emotion-bg", hexToRgba(color, 0.12));
   els.reflectionCard.style.setProperty("--soft-reflection", hexToRgba(color, 0.15));
   els.vaHandle.style.left = `${x}%`;
   els.vaHandle.style.top = `${y}%`;
@@ -186,13 +190,15 @@ function setVA(valence = 0, arousal = 0, color = "#94A3B8") {
   els.vaReadout.textContent = `V ${formatSigned(v)} · A ${formatSigned(a)}`;
 }
 
-function renderFineEmotions(items = []) {
-  els.fineEmotionChips.textContent = "";
-  items.slice(0, 8).forEach((item) => {
+function renderChipList(container, items = []) {
+  if (!container) return;
+  const list = Array.isArray(items) ? items : (items ? [items] : []);
+  container.textContent = "";
+  list.slice(0, 8).forEach((item) => {
     const chip = document.createElement("span");
     chip.className = "emotion-chip";
     chip.textContent = String(item);
-    els.fineEmotionChips.appendChild(chip);
+    container.appendChild(chip);
   });
 }
 
@@ -219,7 +225,9 @@ function applyReflectionFromDiary(diary) {
   els.reflectionNeed.textContent = reflection.possible_need || "-";
   els.weatherReflection.textContent = reflection.weather_reflection || "-";
   els.smallAction.textContent = reflection.small_action_suggestion || "-";
-  renderFineEmotions(reflection.fine_grained_emotions || diary?.fine_emotions_json || []);
+  renderChipList(els.secondaryEmotionChips, reflection.secondary_emotions || diary?.secondary_emotions_json || []);
+  renderChipList(els.fineEmotionChips, reflection.fine_grained_emotions || diary?.fine_emotions_json || []);
+  renderChipList(els.bodySignalChips, reflection.body_signals || diary?.body_signals_json || []);
   renderQuestions(reflection.reflection_questions || []);
   setReflectionState(diary?.analysis_pending ? "待更新" : (hasReflection ? "已复盘" : "待复盘"));
 }
@@ -336,38 +344,64 @@ async function loadDiary() {
 }
 
 async function saveDiary(saveType = "autosave") {
-  if (state.saving) return state.diary;
+  if (state.saving) return state.savePromise || state.diary;
   state.saving = true;
+  els.saveBtn.disabled = true;
   setSaveState(saveType === "autosave" ? "自动保存中" : "保存中");
-  try {
+  state.savePromise = (async () => {
     const payload = currentPayload(saveType);
+    const payloadHash = reflectHash();
     const data = await apiJson(`/api/diary/by-date/${encodeURIComponent(els.date.value)}`, {
       method: "PUT",
       body: JSON.stringify(payload),
     });
     state.diary = data.diary;
-    state.dirty = false;
-    setSaveState(saveType === "autosave" ? "已自动保存" : "已保存");
+    state.dirty = reflectHash() !== payloadHash;
+    setSaveState(state.dirty ? "有未保存修改" : (saveType === "autosave" ? "已自动保存" : "已保存"));
     applyReflectionFromDiary(state.diary);
     return state.diary;
+  })();
+  try {
+    return await state.savePromise;
   } catch (error) {
     setSaveState(`保存失败：${error.message}`);
     throw error;
   } finally {
     state.saving = false;
+    state.savePromise = null;
+    els.saveBtn.disabled = false;
   }
 }
 
 async function reflectDiary(reason = "manual") {
   const hash = reflectHash();
-  if (state.reflecting || (!els.content.value.trim() && reason !== "manual")) return;
+  const contentLength = els.content.value.trim().length;
+  if (state.reflecting) return;
+  if (!contentLength) {
+    setReflectionState("待复盘");
+    if (reason === "manual") setSaveState("先写一点内容再复盘");
+    return;
+  }
+  if (reason === "idle" && contentLength < 24) {
+    setReflectionState("待复盘");
+    return;
+  }
   if (reason === "idle" && hash === state.lastReflectHash) return;
 
   state.reflecting = true;
   els.reflectBtn.disabled = true;
+  els.saveBtn.disabled = true;
   setReflectionState("复盘中");
   try {
-    if (state.dirty) await saveDiary(reason === "manual" ? "manual" : "autosave");
+    if (state.saving) await saveDiary(reason === "manual" ? "manual" : "autosave");
+    for (let attempts = 0; state.dirty && attempts < 2; attempts += 1) {
+      await saveDiary(reason === "manual" ? "manual" : "autosave");
+    }
+    if (state.dirty) {
+      setReflectionState("待更新");
+      setSaveState("有未保存修改");
+      return;
+    }
     const data = await apiJson(`/api/diary/by-date/${encodeURIComponent(els.date.value)}/reflect`, {
       method: "POST",
       body: JSON.stringify({ participant_code: participantCode() || null }),
@@ -383,6 +417,7 @@ async function reflectDiary(reason = "manual") {
   } finally {
     state.reflecting = false;
     els.reflectBtn.disabled = false;
+    els.saveBtn.disabled = false;
   }
 }
 

@@ -20,7 +20,9 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     create_engine,
+    inspect as sa_inspect,
     select,
+    text,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
@@ -128,6 +130,55 @@ def now_utc() -> datetime:
 
 def init_database() -> None:
     Base.metadata.create_all(bind=engine)
+    _ensure_sqlite_schema()
+
+
+def _ensure_sqlite_schema() -> None:
+    """Keep older local SQLite files compatible with the current ORM schema."""
+    if engine.dialect.name != "sqlite":
+        return
+
+    inspector = sa_inspect(engine)
+    if "formal_diaries" not in inspector.get_table_names():
+        return
+
+    existing = {column["name"] for column in inspector.get_columns("formal_diaries")}
+    column_sql = {
+        "title": "VARCHAR(240) DEFAULT ''",
+        "content": "TEXT DEFAULT ''",
+        "physical_weather": "VARCHAR(16) DEFAULT 'sunny'",
+        "mood_weather": "VARCHAR(16) DEFAULT 'sunny'",
+        "source_entry_ids_json": "JSON",
+        "valence": "FLOAT",
+        "arousal": "FLOAT",
+        "primary_emotion": "VARCHAR(128)",
+        "secondary_emotions_json": "JSON",
+        "fine_emotions_json": "JSON",
+        "body_signals_json": "JSON",
+        "emotion_color": "VARCHAR(16)",
+        "emotion_color_name": "VARCHAR(64)",
+        "reflection_json": "JSON",
+        "analysis_version": "VARCHAR(64)",
+        "is_draft": "BOOLEAN DEFAULT 1",
+        "created_at": "DATETIME",
+        "updated_at": "DATETIME",
+        "last_analyzed_at": "DATETIME",
+    }
+    missing = [(name, ddl) for name, ddl in column_sql.items() if name not in existing]
+
+    with engine.begin() as connection:
+        for name, ddl in missing:
+            connection.execute(text(f"ALTER TABLE formal_diaries ADD COLUMN {name} {ddl}"))
+        try:
+            connection.execute(
+                text(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS "
+                    "uq_formal_diaries_participant_date_idx "
+                    "ON formal_diaries (participant_id, diary_date)"
+                )
+            )
+        except Exception as error:
+            print(f"Formal diary unique index migration skipped: {error}")
 
 
 def normalize_participant_code(code: str) -> str:
@@ -337,7 +388,7 @@ def upsert_formal_diary_by_date(
             diary.source_entry_ids_json = safe_json(payload.get("source_entry_ids_json") or [])
 
         save_type = str(payload.get("save_type") or "autosave").strip().lower()
-        if "is_draft" in payload:
+        if payload.get("is_draft") is not None:
             diary.is_draft = bool(payload.get("is_draft"))
         elif save_type == "manual":
             diary.is_draft = False
