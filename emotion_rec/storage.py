@@ -1,5 +1,5 @@
-from __future__ import annotations
 
+from __future__ import annotations
 import csv
 import io
 import json
@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from sqlalchemy import (
+    Boolean,
     JSON,
     DateTime,
     Float,
@@ -17,6 +18,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
     create_engine,
     select,
 )
@@ -72,6 +74,36 @@ class DiaryEntry(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: now_utc())
 
 
+class FormalDiary(Base):
+    __tablename__ = "formal_diaries"
+    __table_args__ = (
+        UniqueConstraint("participant_id", "diary_date", name="uq_formal_diaries_participant_date"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    participant_id: Mapped[int] = mapped_column(ForeignKey("participants.id"), index=True)
+    diary_date: Mapped[str] = mapped_column(String(10), index=True)
+    title: Mapped[str] = mapped_column(String(240), default="")
+    content: Mapped[str] = mapped_column(Text, default="")
+    physical_weather: Mapped[str] = mapped_column(String(16), default="sunny")
+    mood_weather: Mapped[str] = mapped_column(String(16), default="sunny")
+    source_entry_ids_json: Mapped[Any] = mapped_column(JSON, default=list)
+    valence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    arousal: Mapped[float | None] = mapped_column(Float, nullable=True)
+    primary_emotion: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    secondary_emotions_json: Mapped[Any] = mapped_column(JSON, default=list)
+    fine_emotions_json: Mapped[Any] = mapped_column(JSON, default=list)
+    body_signals_json: Mapped[Any] = mapped_column(JSON, default=list)
+    emotion_color: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    emotion_color_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    reflection_json: Mapped[Any] = mapped_column(JSON, default=dict)
+    analysis_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    is_draft: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: now_utc())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: now_utc())
+    last_analyzed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class UsageEvent(Base):
     __tablename__ = "usage_events"
 
@@ -112,15 +144,26 @@ def _participant_by_code(session: Session, participant_code: str) -> Participant
     ).scalar_one_or_none()
 
 
-def get_or_create_participant(participant_code: str, consent_version: str = "research-v1") -> dict[str, Any]:
+def _get_or_create_participant_row(
+    session: Session,
+    participant_code: str,
+    consent_version: str = "research-v1",
+) -> Participant:
     code = normalize_participant_code(participant_code)
-    with SessionLocal() as session:
-        participant = _participant_by_code(session, code)
-        if participant is None:
-            participant = Participant(participant_code=code, consent_version=consent_version)
-            session.add(participant)
+    participant = _participant_by_code(session, code)
+    if participant is None:
+        participant = Participant(participant_code=code, consent_version=consent_version)
+        session.add(participant)
+        session.flush()
+    elif consent_version != "diary-v1":
         participant.consent_version = consent_version or participant.consent_version
-        participant.last_seen_at = now_utc()
+    participant.last_seen_at = now_utc()
+    return participant
+
+
+def get_or_create_participant(participant_code: str, consent_version: str = "research-v1") -> dict[str, Any]:
+    with SessionLocal() as session:
+        participant = _get_or_create_participant_row(session, participant_code, consent_version)
         session.commit()
         session.refresh(participant)
         return participant_to_dict(participant)
@@ -201,6 +244,208 @@ def list_diary_entries(participant_code: str) -> list[dict[str, Any]]:
         return [diary_entry_to_dict(row) for row in rows]
 
 
+def normalize_diary_date(value: str) -> str:
+    text = str(value or "").strip()
+    try:
+        datetime.strptime(text, "%Y-%m-%d")
+    except ValueError as exc:
+        raise ValueError("diary_date must use YYYY-MM-DD.") from exc
+    return text
+
+
+def empty_formal_diary(participant_code: str, diary_date: str) -> dict[str, Any]:
+    return {
+        "id": None,
+        "participant_id": None,
+        "participant_code": normalize_participant_code(participant_code or "local"),
+        "diary_date": normalize_diary_date(diary_date),
+        "title": "",
+        "content": "",
+        "physical_weather": "sunny",
+        "mood_weather": "sunny",
+        "source_entry_ids_json": [],
+        "valence": None,
+        "arousal": None,
+        "primary_emotion": None,
+        "secondary_emotions_json": [],
+        "fine_emotions_json": [],
+        "body_signals_json": [],
+        "emotion_color": None,
+        "emotion_color_name": None,
+        "reflection_json": {},
+        "analysis_version": None,
+        "is_draft": True,
+        "created_at": None,
+        "updated_at": None,
+        "last_analyzed_at": None,
+        "analysis_pending": False,
+    }
+
+
+def get_formal_diary_by_date(participant_code: str, diary_date: str) -> dict[str, Any]:
+    code = normalize_participant_code(participant_code or "local")
+    date_text = normalize_diary_date(diary_date)
+    with SessionLocal() as session:
+        participant = _participant_by_code(session, code)
+        if participant is None:
+            return empty_formal_diary(code, date_text)
+        diary = session.execute(
+            select(FormalDiary)
+            .where(FormalDiary.participant_id == participant.id, FormalDiary.diary_date == date_text)
+        ).scalar_one_or_none()
+        if diary is None:
+            return empty_formal_diary(code, date_text)
+        return formal_diary_to_dict(diary, participant.participant_code)
+
+
+def upsert_formal_diary_by_date(
+    participant_code: str,
+    diary_date: str,
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    code = normalize_participant_code(participant_code or "local")
+    date_text = normalize_diary_date(diary_date)
+    payload = payload or {}
+    with SessionLocal() as session:
+        participant = _get_or_create_participant_row(session, code, "diary-v1")
+        diary = session.execute(
+            select(FormalDiary)
+            .where(FormalDiary.participant_id == participant.id, FormalDiary.diary_date == date_text)
+        ).scalar_one_or_none()
+        if diary is None:
+            diary = FormalDiary(participant_id=participant.id, diary_date=date_text)
+            session.add(diary)
+            session.flush()
+
+        tracked_before = (
+            diary.title,
+            diary.content,
+            diary.physical_weather,
+            diary.mood_weather,
+            json.dumps(diary.source_entry_ids_json or [], sort_keys=True, default=str),
+        )
+
+        if "title" in payload:
+            diary.title = str(payload.get("title") or "")[:240]
+        if "content" in payload:
+            diary.content = str(payload.get("content") or "")[:50000]
+        if "physical_weather" in payload:
+            diary.physical_weather = optional_str(payload.get("physical_weather"), 16) or "sunny"
+        if "mood_weather" in payload:
+            diary.mood_weather = optional_str(payload.get("mood_weather"), 16) or "sunny"
+        if "source_entry_ids_json" in payload:
+            diary.source_entry_ids_json = safe_json(payload.get("source_entry_ids_json") or [])
+
+        save_type = str(payload.get("save_type") or "autosave").strip().lower()
+        if "is_draft" in payload:
+            diary.is_draft = bool(payload.get("is_draft"))
+        elif save_type == "manual":
+            diary.is_draft = False
+        elif save_type == "autosave":
+            diary.is_draft = True
+
+        tracked_after = (
+            diary.title,
+            diary.content,
+            diary.physical_weather,
+            diary.mood_weather,
+            json.dumps(diary.source_entry_ids_json or [], sort_keys=True, default=str),
+        )
+        if tracked_before != tracked_after and diary.last_analyzed_at is not None:
+            version = diary.analysis_version or "diary-reflection-v1"
+            diary.analysis_version = version if version.endswith(":stale") else f"{version}:stale"
+
+        diary.updated_at = now_utc()
+        session.commit()
+        session.refresh(diary)
+        return formal_diary_to_dict(diary, participant.participant_code)
+
+
+def update_formal_diary_reflection(
+    participant_code: str,
+    diary_date: str,
+    analysis: dict[str, Any],
+) -> dict[str, Any]:
+    code = normalize_participant_code(participant_code or "local")
+    date_text = normalize_diary_date(diary_date)
+    analysis = analysis or {}
+    with SessionLocal() as session:
+        participant = _get_or_create_participant_row(session, code, "diary-v1")
+        diary = session.execute(
+            select(FormalDiary)
+            .where(FormalDiary.participant_id == participant.id, FormalDiary.diary_date == date_text)
+        ).scalar_one_or_none()
+        if diary is None:
+            diary = FormalDiary(participant_id=participant.id, diary_date=date_text)
+            session.add(diary)
+            session.flush()
+
+        diary.valence = optional_float(analysis.get("valence"))
+        diary.arousal = optional_float(analysis.get("arousal"))
+        diary.primary_emotion = optional_str(analysis.get("primary_emotion"), 128)
+        diary.secondary_emotions_json = safe_json(analysis.get("secondary_emotions_json") or [])
+        diary.fine_emotions_json = safe_json(analysis.get("fine_emotions_json") or [])
+        diary.body_signals_json = safe_json(analysis.get("body_signals_json") or [])
+        diary.emotion_color = optional_str(analysis.get("emotion_color"), 16)
+        diary.emotion_color_name = optional_str(analysis.get("emotion_color_name"), 64)
+        diary.reflection_json = safe_json(analysis.get("reflection_json") or {})
+        diary.analysis_version = optional_str(analysis.get("analysis_version"), 64) or "diary-reflection-v1"
+        diary.last_analyzed_at = now_utc()
+        diary.updated_at = diary.last_analyzed_at
+        if "is_draft" in analysis:
+            diary.is_draft = bool(analysis.get("is_draft"))
+        session.commit()
+        session.refresh(diary)
+        return formal_diary_to_dict(diary, participant.participant_code)
+
+
+def list_diary_context(participant_code: str, diary_date: str) -> list[dict[str, Any]]:
+    code = normalize_participant_code(participant_code or "local")
+    date_text = normalize_diary_date(diary_date)
+    with SessionLocal() as session:
+        participant = _participant_by_code(session, code)
+        if participant is None:
+            return []
+
+        journal_rows = session.execute(
+            select(DiaryEntry)
+            .where(DiaryEntry.participant_id == participant.id)
+            .order_by(DiaryEntry.created_at.asc())
+        ).scalars()
+        events = session.execute(
+            select(UsageEvent)
+            .where(UsageEvent.participant_id == participant.id)
+            .order_by(UsageEvent.created_at.asc())
+        ).scalars()
+
+        items: list[dict[str, Any]] = []
+        for entry in journal_rows:
+            created_at = isoformat(entry.created_at)
+            if not _iso_date_matches(created_at, date_text):
+                continue
+            text = str(entry.raw_text or entry.transcript_text or "").strip()
+            summary = text[:180] + ("..." if len(text) > 180 else "")
+            items.append({
+                "source": "journal",
+                "id": entry.id,
+                "time": created_at,
+                "summary": summary or "随手记记录",
+                "valence": entry.final_valence if entry.final_valence is not None else entry.original_valence,
+                "arousal": entry.final_arousal if entry.final_arousal is not None else entry.original_arousal,
+                "primary_emotion": entry.final_label or entry.original_label or "中性",
+            })
+
+        for event in events:
+            created_at = isoformat(event.created_at)
+            if not _iso_date_matches(created_at, date_text):
+                continue
+            context_item = usage_event_to_diary_context(event)
+            if context_item:
+                items.append(context_item)
+
+        return sorted(items, key=lambda item: str(item.get("time") or ""))
+
+
 def export_participant_data(participant_code: str) -> dict[str, Any]:
     with SessionLocal() as session:
         participant = _participant_by_code(session, participant_code)
@@ -211,6 +456,11 @@ def export_participant_data(participant_code: str) -> dict[str, Any]:
             .where(DiaryEntry.participant_id == participant.id)
             .order_by(DiaryEntry.created_at.asc())
         ).scalars()
+        formal_diaries = session.execute(
+            select(FormalDiary)
+            .where(FormalDiary.participant_id == participant.id)
+            .order_by(FormalDiary.diary_date.asc())
+        ).scalars()
         events = session.execute(
             select(UsageEvent)
             .where(UsageEvent.participant_id == participant.id)
@@ -219,6 +469,7 @@ def export_participant_data(participant_code: str) -> dict[str, Any]:
         return {
             "participant": participant_to_dict(participant),
             "diary_entries": [diary_entry_to_dict(row) for row in diaries],
+            "formal_diaries": [formal_diary_to_dict(row, participant.participant_code) for row in formal_diaries],
             "usage_events": [usage_event_to_dict(row) for row in events],
         }
 
@@ -227,10 +478,14 @@ def export_all_data() -> dict[str, Any]:
     with SessionLocal() as session:
         participants = session.execute(select(Participant).order_by(Participant.created_at.asc())).scalars()
         diaries = session.execute(select(DiaryEntry).order_by(DiaryEntry.created_at.asc())).scalars()
+        formal_diaries = session.execute(select(FormalDiary).order_by(FormalDiary.diary_date.asc())).scalars()
         events = session.execute(select(UsageEvent).order_by(UsageEvent.created_at.asc())).scalars()
+        participant_rows = [participant_to_dict(row) for row in participants]
+        participants_by_id = {item["id"]: item["participant_code"] for item in participant_rows}
         return {
-            "participants": [participant_to_dict(row) for row in participants],
+            "participants": participant_rows,
             "diary_entries": [diary_entry_to_dict(row) for row in diaries],
+            "formal_diaries": [formal_diary_to_dict(row, participants_by_id.get(row.participant_id, "")) for row in formal_diaries],
             "usage_events": [usage_event_to_dict(row) for row in events],
         }
 
@@ -316,6 +571,23 @@ def export_bundle_to_csv(bundle: dict[str, Any]) -> str:
             }
         )
 
+    for diary in bundle.get("formal_diaries", []):
+        writer.writerow(
+            {
+                "record_type": "formal_diary",
+                "participant_code": diary.get("participant_code") or participants_by_id.get(diary.get("participant_id"), ""),
+                "id": diary["id"],
+                "created_at": diary["created_at"],
+                "updated_at": diary["updated_at"],
+                "raw_text": diary.get("content", ""),
+                "final_label": diary.get("primary_emotion"),
+                "final_valence": diary.get("valence"),
+                "final_arousal": diary.get("arousal"),
+                "final_color": diary.get("emotion_color"),
+                "json_payload": json.dumps(diary, ensure_ascii=False),
+            }
+        )
+
     for event in bundle.get("usage_events", []):
         writer.writerow(
             {
@@ -362,6 +634,89 @@ def diary_entry_to_dict(entry: DiaryEntry) -> dict[str, Any]:
     }
 
 
+def formal_diary_to_dict(diary: FormalDiary, participant_code: str | None = None) -> dict[str, Any]:
+    return {
+        "id": diary.id,
+        "participant_id": diary.participant_id,
+        "participant_code": participant_code,
+        "diary_date": diary.diary_date,
+        "title": diary.title,
+        "content": diary.content,
+        "physical_weather": diary.physical_weather,
+        "mood_weather": diary.mood_weather,
+        "source_entry_ids_json": diary.source_entry_ids_json or [],
+        "valence": diary.valence,
+        "arousal": diary.arousal,
+        "primary_emotion": diary.primary_emotion,
+        "secondary_emotions_json": diary.secondary_emotions_json or [],
+        "fine_emotions_json": diary.fine_emotions_json or [],
+        "body_signals_json": diary.body_signals_json or [],
+        "emotion_color": diary.emotion_color,
+        "emotion_color_name": diary.emotion_color_name,
+        "reflection_json": diary.reflection_json or {},
+        "analysis_version": diary.analysis_version,
+        "is_draft": diary.is_draft,
+        "created_at": isoformat(diary.created_at),
+        "updated_at": isoformat(diary.updated_at),
+        "last_analyzed_at": isoformat(diary.last_analyzed_at),
+        "analysis_pending": formal_diary_analysis_pending(diary),
+    }
+
+
+def formal_diary_analysis_pending(diary: FormalDiary) -> bool:
+    if not str(diary.content or "").strip():
+        return False
+    if diary.last_analyzed_at is None:
+        return True
+    return str(diary.analysis_version or "").endswith(":stale")
+
+
+def usage_event_to_diary_context(event: UsageEvent) -> dict[str, Any] | None:
+    event_type = str(event.event_type or "")
+    metadata = event.metadata_json if isinstance(event.metadata_json, dict) else {}
+    created_at = isoformat(event.created_at)
+
+    if event_type == "body_sensation_advice":
+        symptoms = metadata.get("symptoms") or []
+        regions = metadata.get("selected_regions") or []
+        symptom_labels = [str(item.get("label") or item.get("id") or "") for item in symptoms if isinstance(item, dict)]
+        region_labels = [str(item.get("label") or item.get("id") or "") for item in regions if isinstance(item, dict)]
+        parts = [item for item in ["、".join(region_labels), "、".join(symptom_labels)] if item]
+        return {
+            "source": "body_sensation",
+            "id": event.id,
+            "time": created_at,
+            "summary": "身体感受：" + ("；".join(parts) if parts else "已生成身体感受建议"),
+            "valence": optional_float(metadata.get("valence")),
+            "arousal": optional_float(metadata.get("arousal")),
+            "primary_emotion": metadata.get("primary_label") or "身体感受",
+        }
+
+    if event_type == "custom_label_applied":
+        return {
+            "source": "realtime_emotion",
+            "id": event.id,
+            "time": created_at,
+            "summary": f"实时情绪标签调整为：{metadata.get('label') or '未命名'}",
+            "valence": optional_float(metadata.get("valence")),
+            "arousal": optional_float(metadata.get("arousal")),
+            "primary_emotion": metadata.get("label") or "自定义情绪",
+        }
+
+    if event_type == "va_coordinate_adjusted":
+        return {
+            "source": "realtime_emotion",
+            "id": event.id,
+            "time": created_at,
+            "summary": "实时 V-A 坐标被手动调整",
+            "valence": optional_float(metadata.get("valence")),
+            "arousal": optional_float(metadata.get("arousal")),
+            "primary_emotion": metadata.get("label") or "V-A 调整",
+        }
+
+    return None
+
+
 def usage_event_to_dict(event: UsageEvent) -> dict[str, Any]:
     return {
         "id": event.id,
@@ -370,6 +725,10 @@ def usage_event_to_dict(event: UsageEvent) -> dict[str, Any]:
         "metadata_json": event.metadata_json,
         "created_at": isoformat(event.created_at),
     }
+
+
+def _iso_date_matches(value: str | None, diary_date: str) -> bool:
+    return bool(value and str(value).startswith(diary_date))
 
 
 def isoformat(value: datetime | None) -> str | None:

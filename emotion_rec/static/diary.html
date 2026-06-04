@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>日记本 | EmoBridge</title>
+  <link rel="stylesheet" href="/static/styles.css?v=20260604" />
+  <link rel="stylesheet" href="/static/diary.css?v=20260604" />
+</head>
+<body class="diary-page">
+<main class="app-shell diary-shell">
+  <header class="topbar diary-topbar">
+    <a class="brand-mark" href="/" aria-label="EmoBridge 首页">
+      <img class="brand-icon2" src="/static/icon2-only.png" alt="" aria-hidden="true" />
+      <img class="brand-name-img" src="/static/name-text.png" alt="emobridge" />
+    </a>
+
+    <nav class="view-tabs" aria-label="Primary navigation">
+      <a class="tab-button" href="/">首页</a>
+      <a class="tab-button" href="/#journalView">随手记</a>
+      <a class="tab-button is-active" href="/diary" aria-current="page">日记本</a>
+      <a class="tab-button" href="/body-sensation">身体感受</a>
+    </nav>
+
+    <div class="topbar-right diary-session">
+      <span class="diary-session-label">正式日记</span>
+      <span class="status-pill" id="diaryParticipant">local</span>
+    </div>
+  </header>
+
+  <section class="diary-heading" aria-labelledby="diaryTitle">
+    <div>
+      <p class="eyebrow">Diary</p>
+      <h1 id="diaryTitle">日记本</h1>
+    </div>
+    <div class="diary-heading-actions">
+      <label class="diary-date-control" for="diaryDate">
+        <span>日期</span>
+        <input id="diaryDate" type="date" />
+      </label>
+      <button class="warm-btn ghost" type="button" id="refreshContextBtn">查看今日情绪记录</button>
+    </div>
+  </section>
+
+  <section class="diary-workspace" aria-label="正式日记工作区">
+    <aside class="diary-panel context-panel" aria-labelledby="contextTitle">
+      <div class="panel-title-row">
+        <div>
+          <p class="eyebrow">素材</p>
+          <h2 id="contextTitle">今日情绪记录</h2>
+        </div>
+        <span class="context-count" id="contextCount">0</span>
+      </div>
+      <div class="context-list" id="contextList"></div>
+      <div class="context-actions">
+        <button class="warm-btn ghost" type="button" id="insertContextBtn">插入选中摘要</button>
+      </div>
+    </aside>
+
+    <section class="diary-editor-panel" aria-labelledby="editorTitle">
+      <div class="diary-meta-row">
+        <label class="diary-select-control" for="physicalWeather">
+          <span>现实天气</span>
+          <select id="physicalWeather" name="physical_weather"></select>
+        </label>
+        <label class="diary-select-control" for="moodWeather">
+          <span>心情天气</span>
+          <select id="moodWeather" name="mood_weather"></select>
+        </label>
+      </div>
+
+      <label class="diary-title-control" for="diaryEntryTitle">
+        <span id="editorTitle">标题</span>
+        <input id="diaryEntryTitle" type="text" maxlength="240" placeholder="给今天留一个标题" autocomplete="off" />
+      </label>
+
+      <label class="diary-content-control" for="diaryContent">
+        <span>正式日记</span>
+        <textarea id="diaryContent" spellcheck="true" placeholder="完整写下今天发生的事、你的反应、身体感受和想留下来的细节。"></textarea>
+      </label>
+
+      <div class="diary-editor-footer">
+        <span class="save-state" id="saveState">就绪</span>
+        <div class="diary-editor-actions">
+          <button class="warm-btn ghost" type="button" id="voiceDiaryBtn">语音转文字</button>
+          <button class="warm-btn ghost" type="button" id="reflectDiaryBtn">更新复盘</button>
+          <button class="warm-btn primary" type="button" id="saveDiaryBtn">保存日记</button>
+        </div>
+      </div>
+    </section>
+
+    <aside class="diary-panel reflection-panel" aria-labelledby="reflectionTitle">
+      <div class="panel-title-row">
+        <div>
+          <p class="eyebrow">Review</p>
+          <h2 id="reflectionTitle">AI 复盘</h2>
+        </div>
+        <span class="reflection-state" id="reflectionState">待复盘</span>
+      </div>
+
+      <div class="reflection-card" id="reflectionCard">
+        <p class="reflection-kicker" id="reflectionPrimary">尚无结果</p>
+        <h3 id="reflectionSummary">写完后会生成当天复盘</h3>
+        <p id="reflectionGentle">复盘会参考正文、所选天气和今日情绪记录，但不会把情绪强行归因于天气。</p>
+        <div class="reflection-grid">
+          <div>
+            <span>可能触发</span>
+            <p id="reflectionTrigger">-</p>
+          </div>
+          <div>
+            <span>可能需要</span>
+            <p id="reflectionNeed">-</p>
+          </div>
+        </div>
+        <p class="weather-line" id="weatherReflection">-</p>
+      </div>
+
+      <section class="diary-va-block" aria-label="V-A 坐标结果">
+        <div class="va-control-head">
+          <span class="panel-label">V-A 坐标</span>
+          <strong id="diaryVAReadout">V +0.00 · A +0.00</strong>
+        </div>
+        <div class="diary-va-plane" id="diaryVAPlane">
+          <span class="va-axis va-axis-x"></span>
+          <span class="va-axis va-axis-y"></span>
+          <span class="va-axis-label va-positive">积极</span>
+          <span class="va-axis-label va-negative">消极</span>
+          <span class="va-axis-label va-high">高能量</span>
+          <span class="va-axis-label va-low">低能量</span>
+          <span class="diary-va-handle" id="diaryVAHandle" aria-hidden="true"></span>
+        </div>
+      </section>
+
+      <div class="reflection-details">
+        <div class="color-result">
+          <span class="color-swatch" id="emotionColorSwatch"></span>
+          <div>
+            <span>情绪颜色</span>
+            <strong id="emotionColorName">雾灰中性</strong>
+          </div>
+        </div>
+        <div class="chip-row diary-chip-row" id="fineEmotionChips"></div>
+        <ul class="question-list" id="reflectionQuestions"></ul>
+        <p class="small-action" id="smallActionSuggestion">-</p>
+      </div>
+    </aside>
+  </section>
+</main>
+<script src="/static/diary.js?v=20260604" defer></script>
+</body>
+</html>

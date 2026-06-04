@@ -1,7 +1,6 @@
 import io
 import os
 import json
-import http.client
 import tempfile
 from pathlib import Path
 import numpy as np
@@ -37,16 +36,22 @@ try:
         split_text_segments,
     )
     from emotion_rec.text_emotion import analyze_text_emotion
+    from emotion_rec import llm_client
     from emotion_rec.storage import (
         create_diary_entry,
         export_all_csv,
         export_all_data,
         export_participant_csv,
         export_participant_data,
+        get_formal_diary_by_date,
         get_or_create_participant,
         init_database,
+        list_diary_context,
         list_diary_entries,
         log_usage_event,
+        normalize_diary_date,
+        update_formal_diary_reflection,
+        upsert_formal_diary_by_date,
     )
 except ModuleNotFoundError:
     from va_mapper import (  # type: ignore
@@ -57,29 +62,34 @@ except ModuleNotFoundError:
         split_text_segments,
     )
     from text_emotion import analyze_text_emotion  # type: ignore
+    import llm_client  # type: ignore
     from storage import (  # type: ignore
         create_diary_entry,
         export_all_csv,
         export_all_data,
         export_participant_csv,
         export_participant_data,
+        get_formal_diary_by_date,
         get_or_create_participant,
         init_database,
+        list_diary_context,
         list_diary_entries,
         log_usage_event,
+        normalize_diary_date,
+        update_formal_diary_reflection,
+        upsert_formal_diary_by_date,
     )
 
 # -----------------------------
 # LLM Configuration
 # -----------------------------
-LLM_API_SCHEME = os.getenv("LLM_API_SCHEME", "https").strip().lower()
-LLM_API_HOST = os.getenv("LLM_API_HOST", "api.chatanywhere.tech").strip()
-LLM_API_PORT = os.getenv("LLM_API_PORT", "").strip()
-LLM_API_PATH = os.getenv("LLM_API_PATH", "/v1/chat/completions").strip() or "/v1/chat/completions"
-LLM_API_KEY = os.getenv("LLM_API_KEY", "")
-LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o")
-LLM_TIMEOUT_SECONDS = float(os.getenv("LLM_TIMEOUT_SECONDS", "20"))
-LLM_ENABLED = os.getenv("LLM_ENABLED", "1").strip().lower() not in {"0", "false", "no", "off"}
+# All LLM traffic goes through emotion_rec/llm_client.py, which uses the OpenAI
+# SDK pointed at DeepSeek. Configure via DEEPSEEK_API_KEY/DEEPSEEK_MODEL, or the
+# legacy LLM_API_KEY/LLM_MODEL aliases. Default model is deepseek-v4-flash.
+try:
+    LLM_TYPOGRAPHY_TEMPERATURE = float(os.getenv("LLM_TYPOGRAPHY_TEMPERATURE", "0.6"))
+except ValueError:
+    LLM_TYPOGRAPHY_TEMPERATURE = 0.6
 VAD_SOURCE_RANGE = os.getenv("VAD_SOURCE_RANGE", "zero_one")
 ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "")
 
@@ -143,6 +153,11 @@ if SHARED_DIR.exists():
 async def index():
     return FileResponse(STATIC_DIR / "index.html")
 
+
+@app.get("/diary", include_in_schema=False)
+async def diary_page():
+    return FileResponse(STATIC_DIR / "diary.html")
+
 # -----------------------------
 # Globals
 # -----------------------------
@@ -190,6 +205,22 @@ class UsageEventRequest(BaseModel):
     metadata_json: dict = Field(default_factory=dict)
 
 
+class FormalDiaryUpsertRequest(BaseModel):
+    participant_code: str | None = Field(default=None, min_length=2, max_length=64)
+    title: str = Field(default="", max_length=240)
+    content: str = Field(default="", max_length=50000)
+    physical_weather: str = Field(default="sunny", max_length=16)
+    mood_weather: str = Field(default="sunny", max_length=16)
+    source_entry_ids_json: list = Field(default_factory=list)
+    save_type: str = Field(default="autosave", max_length=20)
+    auto_analyze: bool = False
+    is_draft: bool | None = None
+
+
+class DiaryReflectRequest(BaseModel):
+    participant_code: str | None = Field(default=None, min_length=2, max_length=64)
+
+
 @app.on_event("startup")
 def _load():
     global processor, model
@@ -222,78 +253,8 @@ def healthz():
 # -----------------------------
 
 
-def _llm_headers():
-    if not LLM_ENABLED:
-        return None
-
-    token = LLM_API_KEY.strip()
-
-    # Local Ollama does not need a real key, but OpenAI-compatible clients still expect Authorization.
-    if not token and LLM_API_SCHEME == "http" and LLM_API_HOST in {"127.0.0.1", "localhost"}:
-        token = "ollama"
-
-    if not token:
-        return None
-
-    if not token.lower().startswith("bearer "):
-        token = f"Bearer {token}"
-
-    return {
-        "Authorization": token,
-        "Content-Type": "application/json",
-    }
-
-
-def _llm_connection():
-    host = LLM_API_HOST.strip()
-    scheme = LLM_API_SCHEME.strip().lower() or "https"
-
-    # Allow users to accidentally pass full URL or host:port.
-    host = host.replace("https://", "").replace("http://", "").split("/")[0]
-
-    port = None
-    if LLM_API_PORT:
-        try:
-            port = int(LLM_API_PORT)
-        except ValueError:
-            print(f"Invalid LLM_API_PORT={LLM_API_PORT!r}; ignoring it.")
-            port = None
-
-    if ":" in host and port is None:
-        maybe_host, maybe_port = host.rsplit(":", 1)
-        if maybe_port.isdigit():
-            host = maybe_host
-            port = int(maybe_port)
-
-    if scheme == "http":
-        return http.client.HTTPConnection(host, port=port, timeout=LLM_TIMEOUT_SECONDS)
-
-    return http.client.HTTPSConnection(host, port=port, timeout=LLM_TIMEOUT_SECONDS)
-
-
 def _strip_llm_content(content: str) -> str:
-    content = str(content or "").strip()
-
-    # Qwen3 may emit thinking blocks; remove them before JSON parsing.
-    content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL | re.IGNORECASE).strip()
-
-    if "```" in content:
-        content = content.replace("```json", "").replace("```JSON", "").replace("```", "").strip()
-
-    return content
-
-
-def _extract_llm_content(response_json: dict) -> str:
-    if "choices" not in response_json:
-        preview = json.dumps(response_json, ensure_ascii=False)[:1000]
-        raise ValueError(
-            "LLM response missing choices. "
-            f"scheme={LLM_API_SCHEME}, host={LLM_API_HOST}, port={LLM_API_PORT}, "
-            f"model={LLM_MODEL}, response={preview}"
-        )
-
-    message = response_json["choices"][0].get("message") or {}
-    return _strip_llm_content(message.get("content", ""))
+    return llm_client.strip_content(content)
 
 
 def _style_for_va_mapping(va_mapping: dict):
@@ -367,6 +328,289 @@ def infer_text_emotion(text: str):
         "text_emotion": text_emotion,
         "va_mapping": va_mapping,
     }
+
+
+DIARY_WEATHER_VALUES = {"sunny", "cloudy", "overcast", "rainy", "stormy", "snowy", "windy", "foggy"}
+DIARY_WEATHER_LABELS = {
+    "sunny": "晴朗",
+    "cloudy": "多云",
+    "overcast": "阴天",
+    "rainy": "下雨",
+    "stormy": "暴风雨",
+    "snowy": "下雪",
+    "windy": "有风",
+    "foggy": "有雾",
+}
+DIARY_ANALYSIS_VERSION = "diary-reflection-v1"
+
+
+def _diary_participant_code(participant_code: str | None) -> str:
+    return (participant_code or "local").strip() or "local"
+
+
+def _validate_diary_weather(value: str, field_name: str) -> str:
+    weather = str(value or "sunny").strip().lower()
+    if weather not in DIARY_WEATHER_VALUES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"{field_name} must be one of: {', '.join(sorted(DIARY_WEATHER_VALUES))}.",
+        )
+    return weather
+
+
+def _diary_color_name(va_mapping: dict) -> str:
+    names = {
+        "high_positive": "明亮暖色",
+        "low_positive": "柔和浅绿",
+        "high_negative": "红紫高能量",
+        "low_negative": "蓝灰低能量",
+        "neutral": "雾灰中性",
+    }
+    return names.get(va_mapping.get("quadrant"), names["neutral"])
+
+
+def _json_from_llm_content(content: str) -> dict | None:
+    content = _strip_llm_content(content)
+    try:
+        parsed = json.loads(content)
+        return parsed if isinstance(parsed, dict) else None
+    except Exception:
+        pass
+
+    match = re.search(r"\{.*\}", content, flags=re.DOTALL)
+    if not match:
+        return None
+    try:
+        parsed = json.loads(match.group(0))
+        return parsed if isinstance(parsed, dict) else None
+    except Exception:
+        return None
+
+
+def _safe_list(value, limit: int = 8) -> list:
+    if isinstance(value, list):
+        return [item for item in value if item not in (None, "")][:limit]
+    if isinstance(value, str) and value.strip():
+        return [value.strip()]
+    return []
+
+
+def _diary_body_signals(text: str, text_emotion: dict, raw_signals=None) -> list[str]:
+    signals = [str(item).strip() for item in _safe_list(raw_signals, 8) if str(item).strip()]
+    seen = set(signals)
+    body_terms = [
+        "胸口", "心慌", "心跳", "喉咙", "胃", "肚子", "头疼", "头痛", "头晕",
+        "肩颈", "紧绷", "疲惫", "乏力", "睡不着", "出汗", "手抖", "呼吸",
+    ]
+    for term in body_terms:
+        if term in text and term not in seen:
+            seen.add(term)
+            signals.append(term)
+    for segment in text_emotion.get("segments", []) if isinstance(text_emotion, dict) else []:
+        for evidence in segment.get("evidence", []) or []:
+            evidence_text = str(evidence)
+            if "身体" in evidence_text and evidence_text not in seen:
+                seen.add(evidence_text)
+                signals.append(evidence_text)
+    return signals[:8]
+
+
+def _diary_text_preview(text: str, fallback: str = "今天的日记内容还不多。") -> str:
+    clean = re.sub(r"\s+", " ", str(text or "")).strip()
+    if not clean:
+        return fallback
+    first = re.split(r"[。！？!?\n]", clean, maxsplit=1)[0].strip() or clean
+    return first[:180] + ("..." if len(first) > 180 else "")
+
+
+def _build_diary_emotion_context(content: str) -> dict:
+    text_emotion = analyze_text_emotion(content)
+    va_mapping = map_segments(text_emotion.get("segments", []))
+    overall = va_mapping.get("overall") or map_va(0.0, 0.0, 0.0)
+    candidate_emotions = [
+        item.get("label")
+        for item in overall.get("candidates", [])
+        if isinstance(item, dict) and item.get("label")
+    ]
+    return {
+        "text_emotion": text_emotion,
+        "va_mapping": va_mapping,
+        "overall": overall,
+        "primary_emotion": overall.get("label", "中性"),
+        "candidate_emotions": candidate_emotions[:8],
+        "valence": float(overall.get("valence", 0.0)),
+        "arousal": float(overall.get("arousal", 0.0)),
+        "confidence": float(overall.get("confidence", 0.0)),
+        "emotion_color": overall.get("color", "#94A3B8"),
+        "emotion_color_name": _diary_color_name(overall),
+    }
+
+
+def _filter_diary_context_for_sources(context_items: list[dict], source_ids: list) -> list[dict]:
+    if not source_ids:
+        return context_items
+    selected = {str(item) for item in source_ids}
+    filtered = []
+    for item in context_items:
+        key = f"{item.get('source')}:{item.get('id')}"
+        if key in selected or str(item.get("id")) in selected:
+            filtered.append(item)
+    return filtered or context_items
+
+
+def _fallback_diary_reflection(diary: dict, emotion_context: dict, context_items: list[dict]) -> dict:
+    overall = emotion_context.get("overall", {})
+    primary = emotion_context.get("primary_emotion") or overall.get("label") or "中性"
+    candidates = [label for label in emotion_context.get("candidate_emotions", []) if label and label != primary]
+    physical = diary.get("physical_weather") or "sunny"
+    mood = diary.get("mood_weather") or "sunny"
+    physical_label = DIARY_WEATHER_LABELS.get(physical, physical)
+    mood_label = DIARY_WEATHER_LABELS.get(mood, mood)
+    context_hint = ""
+    if context_items:
+        context_hint = f" 今天还参考了 {len(context_items)} 条随手记或身体感受素材。"
+
+    return {
+        "event_summary": _diary_text_preview(diary.get("content", "")),
+        "gentle_reflection": (
+            f"看起来，今天更靠近“{primary}”这类感受。{context_hint}"
+            "这里的复盘只是帮你把线索放在一起看，不急着给它下结论。"
+        ),
+        "primary_emotion": primary,
+        "secondary_emotions": candidates[:4],
+        "fine_grained_emotions": candidates[:5],
+        "body_signals": _diary_body_signals(diary.get("content", ""), emotion_context.get("text_emotion", {})),
+        "valence": float(emotion_context.get("valence", 0.0)),
+        "arousal": float(emotion_context.get("arousal", 0.0)),
+        "emotion_color": emotion_context.get("emotion_color") or overall.get("color") or "#94A3B8",
+        "emotion_color_name": emotion_context.get("emotion_color_name") or _diary_color_name(overall),
+        "weather_reflection": (
+            f"现实天气是{physical_label}，心情天气是{mood_label}。天气可以作为背景被看见，"
+            "但不需要把今天的情绪强行归因到天气上。"
+        ),
+        "possible_trigger": "可能和今天反复出现的事件、关系、任务或身体消耗有关；还需要你自己的感受来确认。",
+        "possible_need": "也许需要一点停顿、被理解，或把今天最耗力的部分从脑子里放下来。",
+        "reflection_questions": [
+            "今天哪一刻最明显地改变了你的情绪天气？",
+            "有没有一个感受，是你写完以后才发现它一直在？",
+            "如果只保留一个小需求，它会是什么？",
+        ],
+        "small_action_suggestion": "可以先离开屏幕两分钟，喝一点水，把今天最重的一件事用一句话写在旁边。",
+    }
+
+
+def _normalize_diary_reflection(raw: dict | None, diary: dict, emotion_context: dict, context_items: list[dict]) -> dict:
+    fallback = _fallback_diary_reflection(diary, emotion_context, context_items)
+    raw = raw if isinstance(raw, dict) else {}
+    result = dict(fallback)
+    for key in (
+        "event_summary", "gentle_reflection", "weather_reflection", "possible_trigger",
+        "possible_need", "small_action_suggestion",
+    ):
+        value = raw.get(key)
+        if isinstance(value, str) and value.strip():
+            result[key] = value.strip()
+
+    for key in ("secondary_emotions", "fine_grained_emotions", "reflection_questions"):
+        values = _safe_list(raw.get(key), 8)
+        if values:
+            result[key] = values
+
+    body_signals = _diary_body_signals(diary.get("content", ""), emotion_context.get("text_emotion", {}), raw.get("body_signals"))
+    if body_signals:
+        result["body_signals"] = body_signals
+
+    overall = emotion_context.get("overall", {})
+    result["primary_emotion"] = emotion_context.get("primary_emotion") or overall.get("label") or result["primary_emotion"]
+    result["valence"] = float(emotion_context.get("valence", overall.get("valence", 0.0)))
+    result["arousal"] = float(emotion_context.get("arousal", overall.get("arousal", 0.0)))
+    result["emotion_color"] = emotion_context.get("emotion_color") or overall.get("color") or "#94A3B8"
+    result["emotion_color_name"] = emotion_context.get("emotion_color_name") or _diary_color_name(overall)
+    return result
+
+
+def _call_diary_reflection_llm(diary: dict, emotion_context: dict, context_items: list[dict]) -> dict | None:
+    if not llm_client.llm_enabled():
+        return None
+
+    model_name = os.getenv("DIARY_REFLECTION_LLM_MODEL", "").strip() or None
+    try:
+        temperature = float(os.getenv("DIARY_REFLECTION_LLM_TEMPERATURE", "0.18"))
+    except ValueError:
+        temperature = 0.18
+    try:
+        max_tokens = int(os.getenv("DIARY_REFLECTION_LLM_MAX_TOKENS", "4096"))
+    except ValueError:
+        max_tokens = 4096
+
+    system_prompt = """你是 EmoBridge 的正式日记复盘助手，不是诊断系统。
+你的任务是基于用户写完的一天日记、当天可参考的随手记/身体感受素材、现实天气和心情天气，生成温柔、克制、结构化的复盘。
+
+规则：
+- 只输出合法 JSON，不要 Markdown，不要 <think>。
+- 不要使用诊断式语言，不要说“你就是焦虑/抑郁/有问题”。
+- 多使用“可能”“看起来”“也许”“更像是”。
+- 不要强行解释用户，也不要强行把情绪归因于天气。
+- 天气只能作为背景线索，不能被写成情绪原因。
+- valence、arousal、primary_emotion 已由系统的文本情绪识别给出，你可以参考，但不要另写一套分类逻辑。
+- emotion_color 由系统代码统一映射；如果你输出颜色，后端也会用系统颜色覆盖。
+
+必须输出这些顶层字段：
+event_summary, gentle_reflection, primary_emotion, secondary_emotions, fine_grained_emotions, body_signals, valence, arousal, emotion_color, emotion_color_name, weather_reflection, possible_trigger, possible_need, reflection_questions, small_action_suggestion。"""
+
+    user_payload = {
+        "diary": {
+            "date": diary.get("diary_date"),
+            "title": diary.get("title"),
+            "content": diary.get("content"),
+            "physical_weather": diary.get("physical_weather"),
+            "physical_weather_label": DIARY_WEATHER_LABELS.get(diary.get("physical_weather"), diary.get("physical_weather")),
+            "mood_weather": diary.get("mood_weather"),
+            "mood_weather_label": DIARY_WEATHER_LABELS.get(diary.get("mood_weather"), diary.get("mood_weather")),
+        },
+        "emotion_context_from_system": {
+            "valence": emotion_context.get("valence"),
+            "arousal": emotion_context.get("arousal"),
+            "primary_emotion": emotion_context.get("primary_emotion"),
+            "candidate_emotions": emotion_context.get("candidate_emotions"),
+            "confidence": emotion_context.get("confidence"),
+            "emotion_color": emotion_context.get("emotion_color"),
+            "emotion_color_name": emotion_context.get("emotion_color_name"),
+        },
+        "context_records": context_items[:12],
+        "output_schema": {
+            "event_summary": "string",
+            "gentle_reflection": "string",
+            "primary_emotion": "string",
+            "secondary_emotions": [],
+            "fine_grained_emotions": [],
+            "body_signals": [],
+            "valence": -0.5,
+            "arousal": 0.7,
+            "emotion_color": "#xxxxxx",
+            "emotion_color_name": "string",
+            "weather_reflection": "string",
+            "possible_trigger": "string",
+            "possible_need": "string",
+            "reflection_questions": [],
+            "small_action_suggestion": "string",
+        },
+    }
+
+    try:
+        parsed = llm_client.chat_json(
+            [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": json.dumps(user_payload, ensure_ascii=False)},
+            ],
+            model=model_name,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+        return parsed if isinstance(parsed, dict) else None
+    except Exception as error:
+        print(f"[diary] reflection LLM skipped: {error}")
+        return None
 
 
 def normalize_design_for_mapping(design: dict, va_mapping: dict):
@@ -624,46 +868,29 @@ def call_llm_typography_design(text: str, vad: dict, acoustics: dict):
     """
 
     try:
-        headers = _llm_headers()
-        if not headers:
+        if not llm_client.llm_enabled():
             return build_fallback_typography_design(text, vad, acoustics)
 
-        conn = _llm_connection()
-        payload = json.dumps({
-            "model": LLM_MODEL,
-            "messages": [
+        parsed_result = llm_client.chat_json(
+            [
                 {"role": "system", "content": "You are a Semantic Typography Expert. You trust the text's meaning over the audio's volume."},
-                {"role": "user", "content": prompt}
+                {"role": "user", "content": prompt},
             ],
-            # 🔥 0.75 温度，保证它敢于根据语义进行夸张设计
-            "temperature": 0.75, 
-            "response_format": { "type": "json_object" }
-        })
-        conn.request("POST", LLM_API_PATH, payload, headers)
-        res = conn.getresponse()
-        data = res.read()
-        
-        response_json = json.loads(data.decode("utf-8"))
-        content = _extract_llm_content(response_json)
-        
-        if "```" in content:
-            content = content.replace("```json", "").replace("```", "").strip()
-            
-        parsed_result = json.loads(content)
-        
+            temperature=0.75,
+            max_tokens=2048,
+        )
+
+        if not isinstance(parsed_result, dict):
+            return build_fallback_typography_design(text, vad, acoustics)
+
         if "design" in parsed_result:
             return parsed_result["design"]
-        else:
-            return parsed_result
+        return parsed_result
         
     except Exception as e:
         print(f"LLM Call Failed: {e}")
         return build_fallback_typography_design(text, vad, acoustics)
 
-
-import json
-import http.client
-import re
 
 def call_llm_typography_design_2(text: str, vad: dict, acoustics: dict):
     """
@@ -728,31 +955,20 @@ def call_llm_typography_design_2(text: str, vad: dict, acoustics: dict):
     """
 
     try:
-        headers = _llm_headers()
-        if not headers:
+        if not llm_client.llm_enabled():
             return build_fallback_typography_design(text, vad, acoustics)
 
-        conn = _llm_connection()
-        payload = json.dumps({
-            "model": LLM_MODEL,
-            "messages": [
+        llm_output = llm_client.chat_json(
+            [
                 {"role": "system", "content": "You are a JSON-only Kinetic Typography generator."},
-                {"role": "user", "content": prompt}
+                {"role": "user", "content": prompt},
             ],
-            "temperature": 0.5, 
-            "response_format": { "type": "json_object" }
-        })
-        conn.request("POST", LLM_API_PATH, payload, headers)
-        res = conn.getresponse()
-        data = res.read()
-        
-        response_json = json.loads(data.decode("utf-8"))
-        content = _extract_llm_content(response_json)
-        
-        if "```" in content:
-            content = content.replace("```json", "").replace("```", "").strip()
-            
-        llm_output = json.loads(content)
+            temperature=LLM_TYPOGRAPHY_TEMPERATURE,
+            max_tokens=2048,
+        )
+
+        if not isinstance(llm_output, dict):
+            return build_fallback_typography_design(text, vad, acoustics)
         
         # --- PYTHON POST-PROCESSING (修复版) ---
         
@@ -951,6 +1167,97 @@ async def admin_export_csv(
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": 'attachment; filename="emomirror-export.csv"'},
     )
+
+
+
+@app.get("/api/diary")
+async def get_diary_by_date(
+    date: str = Query(..., description="Diary date in YYYY-MM-DD"),
+    participant_code: str | None = Query(default=None),
+):
+    try:
+        diary_date = normalize_diary_date(date)
+        code = _diary_participant_code(participant_code)
+        return {"status": "success", "diary": get_formal_diary_by_date(code, diary_date)}
+    except Exception as error:
+        raise _storage_error(error)
+
+
+@app.get("/api/diary/context")
+async def get_diary_context_by_date(
+    date: str = Query(..., description="Diary date in YYYY-MM-DD"),
+    participant_code: str | None = Query(default=None),
+):
+    try:
+        diary_date = normalize_diary_date(date)
+        code = _diary_participant_code(participant_code)
+        records = list_diary_context(code, diary_date)
+        return {"status": "success", "date": diary_date, "records": records}
+    except Exception as error:
+        raise _storage_error(error)
+
+
+@app.put("/api/diary/by-date/{diary_date}")
+async def put_diary_by_date(diary_date: str, payload: FormalDiaryUpsertRequest):
+    try:
+        date_text = normalize_diary_date(diary_date)
+        payload_data = payload.model_dump() if hasattr(payload, "model_dump") else payload.dict()
+        payload_data["physical_weather"] = _validate_diary_weather(payload_data.get("physical_weather"), "physical_weather")
+        payload_data["mood_weather"] = _validate_diary_weather(payload_data.get("mood_weather"), "mood_weather")
+        code = _diary_participant_code(payload_data.pop("participant_code", None))
+        diary = upsert_formal_diary_by_date(code, date_text, payload_data)
+        return {
+            "status": "success",
+            "save_type": payload_data.get("save_type", "autosave"),
+            "auto_analyze": False,
+            "diary": diary,
+        }
+    except HTTPException:
+        raise
+    except Exception as error:
+        raise _storage_error(error)
+
+
+@app.post("/api/diary/by-date/{diary_date}/reflect")
+async def reflect_diary_by_date(diary_date: str, payload: DiaryReflectRequest | None = None):
+    try:
+        date_text = normalize_diary_date(diary_date)
+        code = _diary_participant_code(payload.participant_code if payload else None)
+        diary = get_formal_diary_by_date(code, date_text)
+        content = str(diary.get("content") or "")
+        emotion_context = _build_diary_emotion_context(content)
+        context_items = list_diary_context(code, date_text)
+        context_items = _filter_diary_context_for_sources(context_items, diary.get("source_entry_ids_json") or [])
+        llm_reflection = _call_diary_reflection_llm(diary, emotion_context, context_items)
+        reflection = _normalize_diary_reflection(llm_reflection, diary, emotion_context, context_items)
+        saved_diary = update_formal_diary_reflection(
+            code,
+            date_text,
+            {
+                "valence": reflection["valence"],
+                "arousal": reflection["arousal"],
+                "primary_emotion": reflection["primary_emotion"],
+                "secondary_emotions_json": reflection.get("secondary_emotions", []),
+                "fine_emotions_json": reflection.get("fine_grained_emotions", []),
+                "body_signals_json": reflection.get("body_signals", []),
+                "emotion_color": reflection["emotion_color"],
+                "emotion_color_name": reflection["emotion_color_name"],
+                "reflection_json": reflection,
+                "analysis_version": DIARY_ANALYSIS_VERSION,
+                "is_draft": False,
+            },
+        )
+        return {
+            "status": "success",
+            "diary": saved_diary,
+            "reflection": reflection,
+            "text_emotion": emotion_context.get("text_emotion"),
+            "va_mapping": emotion_context.get("va_mapping"),
+            "context_records_used": context_items,
+            "llm_used": isinstance(llm_reflection, dict),
+        }
+    except Exception as error:
+        raise _storage_error(error)
 
 
 # --- 3. 核心路由控制器 (Controller) ---

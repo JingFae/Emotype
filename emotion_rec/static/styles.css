@@ -136,6 +136,9 @@ h1, h2, h3 { margin: 0; line-height: 1.1; color: var(--ink); }
   background: transparent;
   transition: background 160ms, color 160ms;
   white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
 }
 .tab-button.is-active {
   background: var(--amber);
