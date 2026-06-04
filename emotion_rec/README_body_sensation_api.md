@@ -85,12 +85,16 @@ POST /body-sensation/advice
 
 ## LLM
 
-实时 /analyze-text 不建议调用本地大模型。
+生成式模型调用统一走 `emotion_rec/llm_client.py`，通过 OpenAI SDK 调用 DeepSeek。
+`/analyze-text` 默认优先使用 DeepSeek 做文本情绪分析，失败或没有 key 时回退本地分类器/规则。
 
-身体感受接口可以单独启用本地 Qwen：
+身体感受接口默认启用 DeepSeek，高风险红旗仍会跳过 LLM 并走安全 fallback：
 
+DEEPSEEK_API_KEY=...
+DEEPSEEK_MODEL=deepseek-v4-flash
 BODY_ADVICE_LLM_ENABLED=1
-BODY_LLM_API_SCHEME=http
-BODY_LLM_API_HOST=127.0.0.1
-BODY_LLM_API_PORT=11434
-BODY_LLM_MODEL=qwen3:4b
+BODY_LLM_MODEL=
+BODY_LLM_TEMPERATURE=0.15
+BODY_LLM_MAX_TOKENS=4096
+
+设 `BODY_ADVICE_LLM_ENABLED=0` 可强制身体感受建议走本地 fallback。

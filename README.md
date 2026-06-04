@@ -116,7 +116,7 @@ EmoType 是一个面向“语音情绪识别 + 情绪文字日记 + 动态字体
 - 后端提供 `process_typography_request(...)` 作为排版设计入口。
 - 优先检查 demo 触发句，命中后返回固定字符级设计。
 - 未命中 demo 时调用 LLM 生成关键词级设计，再转成字符索引 map。
-- 当没有配置 `LLM_API_KEY` 或外部接口失败时，使用本地 fallback 设计。
+- 当没有配置 `DEEPSEEK_API_KEY` 或外部接口失败时，使用本地 fallback 设计。
 - 前端根据 `llm_design` 对每个字符应用：
   - font weight
   - scale
@@ -298,20 +298,34 @@ http://localhost:8000/healthz
 
 ## 关键环境变量
 
+生成式大模型调用统一走 `emotion_rec/llm_client.py`，通过 OpenAI SDK 访问 DeepSeek。默认模型是 `deepseek-v4-flash`；文本情绪默认优先调用 DeepSeek，失败或无 key 时自动回退本地分类器/规则。音频情绪识别仍使用本地 Wav2Vec2。
+
 | 变量 | 说明 | 默认值 |
 | --- | --- | --- |
 | `MODEL_NAME_OR_PATH` | Wav2Vec2 模型路径 | `Wav2vec-2.0/` |
 | `VAD_SOURCE_RANGE` | 模型输出归一化方式 | `zero_one` |
-| `LLM_API_HOST` | LLM API host | `api.chatanywhere.tech` |
-| `LLM_API_KEY` | LLM API key，缺失时使用本地 fallback | 空 |
-| `LLM_MODEL` | LLM 模型名 | `gpt-4o` |
-| `LLM_TIMEOUT_SECONDS` | LLM 超时时间 | `20` |
+| `DEEPSEEK_API_KEY` | DeepSeek API key，缺失时使用本地 fallback | 空 |
+| `DEEPSEEK_MODEL` | 全局默认 LLM 模型 | `deepseek-v4-flash` |
+| `DEEPSEEK_BASE_URL` | OpenAI-compatible base URL | `https://api.deepseek.com` |
+| `DEEPSEEK_TIMEOUT_SECONDS` | LLM 超时时间 | `30` |
+| `LLM_ENABLED` | 是否启用 LLM 调用 | `1` |
+| `LLM_TYPOGRAPHY_TEMPERATURE` | 动态字体生成温度 | `0.6` |
 | `DATABASE_URL` | 数据库连接，缺失时使用本地 SQLite | `emotion_rec/emomirror_data.sqlite3` |
 | `ADMIN_TOKEN` | 管理员导出接口 token | 空 |
-| `TEXT_EMOTION_MODEL_NAME` | 文本语义编码模型 | `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` |
-| `TEXT_EMOTION_CLASSIFIER_NAME` | 文本显性情绪分类器 | `Johnson8187/Chinese-Emotion-Small` |
-| `TEXT_EMOTION_HEAD_PATH` | 文本情绪回归头路径 | `emotion_rec/models/text_emotion_head.pt` |
-| `TEXT_EMOTION_BACKEND` | 文本情绪后端模式 | `auto` |
+| `TEXT_EMOTION_BACKEND` | 文本情绪后端：`deepseek` / `auto` / `classifier` / `rules` | `deepseek` |
+| `TEXT_EMOTION_LLM_MODEL` | 文本情绪专用模型，留空继承 `DEEPSEEK_MODEL` | 空 |
+| `TEXT_EMOTION_LLM_TEMPERATURE` | 文本情绪分析温度 | `0.0` |
+| `TEXT_EMOTION_MAX_TOKENS` | 文本情绪 JSON 输出上限 | `8192` |
+| `TEXT_EMOTION_MODEL_NAME` | 本地文本语义编码模型，fallback 用 | `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` |
+| `TEXT_EMOTION_CLASSIFIER_NAME` | 本地文本显性情绪分类器，fallback 用 | `Johnson8187/Chinese-Emotion-Small` |
+| `TEXT_EMOTION_HEAD_PATH` | 本地文本情绪回归头路径，fallback 用 | `emotion_rec/models/text_emotion_head.pt` |
+| `BODY_ADVICE_LLM_ENABLED` | 身体感受建议是否调用 DeepSeek，高风险红旗仍走安全 fallback | `1` |
+| `BODY_LLM_MODEL` | 身体感受建议专用模型，留空继承 `DEEPSEEK_MODEL` | 空 |
+| `BODY_LLM_TEMPERATURE` | 身体感受建议温度 | `0.15` |
+| `BODY_LLM_MAX_TOKENS` | 身体感受建议 JSON 输出上限 | `4096` |
+| `DIARY_REFLECTION_LLM_MODEL` | 正式日记复盘专用模型，留空继承 `DEEPSEEK_MODEL` | 空 |
+| `DIARY_REFLECTION_LLM_TEMPERATURE` | 正式日记复盘温度 | `0.18` |
+| `DIARY_REFLECTION_LLM_MAX_TOKENS` | 正式日记复盘 JSON 输出上限 | `4096` |
 
 ## 中期汇报可用流程
 
@@ -395,4 +409,3 @@ http://localhost:8000/healthz
 ```powershell
 python -m compileall emotion_rec emotion_computing hmotiongpt-api-test
 ```
-

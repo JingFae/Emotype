@@ -1,7 +1,6 @@
 ﻿# -*- coding: utf-8 -*-
 from __future__ import annotations
 
-import http.client
 import json
 import os
 import re
@@ -11,10 +10,12 @@ try:
     from emotion_rec.text_emotion import analyze_text_emotion
     from emotion_rec.va_mapper import map_segments, map_va
     from emotion_rec.storage import list_diary_entries, log_usage_event
+    from emotion_rec import llm_client
 except ModuleNotFoundError:
     from text_emotion import analyze_text_emotion  # type: ignore
     from va_mapper import map_segments, map_va  # type: ignore
     from storage import list_diary_entries, log_usage_event  # type: ignore
+    import llm_client  # type: ignore
 
 
 def _env_bool(name: str, default: bool = False) -> bool:
@@ -414,29 +415,18 @@ def _normalize_body_llm_advice(raw: Any) -> dict[str, Any] | None:
 
 
 def _call_body_llm(input_payload: dict[str, Any]) -> dict[str, Any] | None:
-    if not _env_bool("BODY_ADVICE_LLM_ENABLED", False):
+    if not _env_bool("BODY_ADVICE_LLM_ENABLED", True):
         return None
 
-    scheme = os.getenv("BODY_LLM_API_SCHEME", os.getenv("LLM_API_SCHEME", "http")).strip().lower()
-    host = os.getenv("BODY_LLM_API_HOST", os.getenv("LLM_API_HOST", "127.0.0.1")).strip()
-    port_raw = os.getenv("BODY_LLM_API_PORT", os.getenv("LLM_API_PORT", "11434")).strip()
-    path = os.getenv("BODY_LLM_API_PATH", os.getenv("LLM_API_PATH", "/v1/chat/completions")).strip() or "/v1/chat/completions"
-    model = os.getenv("BODY_LLM_MODEL", os.getenv("LLM_MODEL", "qwen3:4b")).strip()
-    timeout = float(os.getenv("BODY_LLM_TIMEOUT_SECONDS", os.getenv("LLM_TIMEOUT_SECONDS", "60")))
-    api_key = os.getenv("BODY_LLM_API_KEY", os.getenv("LLM_API_KEY", "ollama")).strip() or "ollama"
-
-    host = host.replace("http://", "").replace("https://", "").split("/")[0]
-    port = None
-    if port_raw:
-        try:
-            port = int(port_raw)
-        except Exception:
-            port = None
-    if ":" in host and port is None:
-        maybe_host, maybe_port = host.rsplit(":", 1)
-        if maybe_port.isdigit():
-            host = maybe_host
-            port = int(maybe_port)
+    model = os.getenv("BODY_LLM_MODEL", "").strip() or None
+    try:
+        temperature = float(os.getenv("BODY_LLM_TEMPERATURE", "0.15"))
+    except ValueError:
+        temperature = 0.15
+    try:
+        max_tokens = int(os.getenv("BODY_LLM_MAX_TOKENS", "4096"))
+    except ValueError:
+        max_tokens = 4096
 
     system_prompt = """你是一个身体感受与情绪状态陪伴助手，不是医生，也不是诊断系统。
 
@@ -603,42 +593,20 @@ def _call_body_llm(input_payload: dict[str, Any]) -> dict[str, Any] | None:
         + json.dumps(input_payload, ensure_ascii=False, indent=2)
     )
 
-    body = {
-        "model": model,
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
-        "temperature": 0.15,
-        "response_format": {"type": "json_object"},
-    }
-
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-    }
-
     try:
-        conn_cls = http.client.HTTPConnection if scheme == "http" else http.client.HTTPSConnection
-        conn = conn_cls(host, port=port, timeout=timeout)
-        conn.request("POST", path, json.dumps(body, ensure_ascii=False).encode("utf-8"), headers)
-        res = conn.getresponse()
-        raw = res.read().decode("utf-8", errors="replace")
-        response_json = json.loads(raw)
-
-        if "choices" not in response_json:
-            print(
-                "[body_sensation] LLM response missing choices:",
-                json.dumps(response_json, ensure_ascii=False)[:1000],
-            )
-            return None
-
-        content = response_json["choices"][0].get("message", {}).get("content", "")
-        print("[body_sensation] raw LLM content preview:", _strip_llm_content(content)[:1200])
-        parsed = _json_from_llm_content(content)
+        parsed = llm_client.chat_json(
+            [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
         if isinstance(parsed, dict):
             print("[body_sensation] parsed LLM keys:", list(parsed.keys()))
-        return parsed
+            return parsed
+        return None
     except Exception as error:
         print(f"[body_sensation] LLM skipped: {error}")
         return None
@@ -878,6 +846,9 @@ def _log_body_sensation_event(
                 "risk_level": safety.get("risk_level"),
                 "primary_label": emotion_context.get("primary_label"),
                 "quadrant": emotion_context.get("quadrant"),
+                "valence": emotion_context.get("valence"),
+                "arousal": emotion_context.get("arousal"),
+                "color": emotion_context.get("color"),
             },
         )
         return True
@@ -1021,7 +992,7 @@ def generate_body_sensation_advice(payload: dict[str, Any]) -> dict[str, Any]:
         "analysis_scope": "current_input_plus_recent_diaries" if recent_diary_context else "current_input_only",
         "logged": logged,
         "debug": {
-            "llm_enabled": _env_bool("BODY_ADVICE_LLM_ENABLED", False),
+            "llm_enabled": _env_bool("BODY_ADVICE_LLM_ENABLED", True),
             "advice_source": advice.get("source"),
         },
     }

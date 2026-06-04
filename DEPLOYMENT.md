@@ -46,12 +46,17 @@ https://dashboard.render.com/blueprint/new?repo=https://github.com/JingFae/Emoty
 3. Set these secrets in Render:
 
 ```text
-LLM_API_KEY
+DEEPSEEK_API_KEY
 DATABASE_URL
 ADMIN_TOKEN
 ```
 
-If `LLM_API_KEY` is empty, EmoMirror still runs with local fallback emotion labels and typography styles.
+All generative LLM calls go through `emotion_rec/llm_client.py`, which uses the
+OpenAI SDK pointed at DeepSeek. The default model is `deepseek-v4-flash`; set
+`DEEPSEEK_MODEL` to override it. If `DEEPSEEK_API_KEY` is empty, EmoMirror still
+runs with local fallback emotion labels and typography styles. Audio emotion
+(`/predict`) stays on the local Wav2Vec2 model.
+
 `DATABASE_URL` should point to your Render Postgres internal connection string.
 `ADMIN_TOKEN` protects the full research export endpoints:
 
@@ -69,7 +74,7 @@ Use Docker when you want the same environment locally and in production:
 
 ```powershell
 docker build -t emomirror .
-docker run --rm -p 8000:8000 -e LLM_API_KEY="$env:LLM_API_KEY" emomirror
+docker run --rm -p 8000:8000 -e DEEPSEEK_API_KEY="$env:DEEPSEEK_API_KEY" emomirror
 ```
 
 The Docker image installs CPU-only PyTorch wheels plus system audio dependencies such as `ffmpeg`.

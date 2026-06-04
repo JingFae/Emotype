@@ -8,11 +8,9 @@ services:
     envVars:
       - key: MODEL_NAME_OR_PATH
         value: /app/Wav2vec-2.0
-      - key: LLM_API_HOST
-        value: api.chatanywhere.tech
-      - key: LLM_MODEL
-        value: gpt-4o
-      - key: LLM_API_KEY
+      - key: TEXT_EMOTION_BACKEND
+        value: deepseek
+      - key: DEEPSEEK_API_KEY
         sync: false
       - key: DATABASE_URL
         sync: false
