@@ -1,293 +1,396 @@
 <!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>EmoMirror</title>
-    <link rel="stylesheet" href="/static/styles.css?v=20260527-emoji1" />
-  </head>
-  <body>
-    <main class="app-shell">
-      <header class="topbar">
-        <div class="brand-mark" aria-label="EmoMirror">
-          <span class="brand-symbol" aria-hidden="true"></span>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>EmoMirror</title>
+  <link rel="stylesheet" href="/static/styles.css?v=20260601" />
+</head>
+<body>
+
+<!-- ===== BACKGROUND DECORATIVE BLOBS (fixed, z-index -1) ===== -->
+<svg class="bg-decoration" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <filter id="blob-blur" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="48"/>
+    </filter>
+  </defs>
+  <g filter="url(#blob-blur)">
+    <!-- Coral/red blobs -->
+    <ellipse cx="1340" cy="70"  rx="150" ry="95"  fill="#F77761" opacity="0.38" transform="rotate(-22 1340 70)"/>
+    <ellipse cx="55"   cy="580" rx="110" ry="160" fill="#F77761" opacity="0.30" transform="rotate(18 55 580)"/>
+    <ellipse cx="1080" cy="840" rx="95"  ry="65"  fill="#F77761" opacity="0.28" transform="rotate(35 1080 840)"/>
+    <!-- Blue/teal blobs -->
+    <ellipse cx="110"  cy="140" rx="140" ry="85"  fill="#8FD2DD" opacity="0.35" transform="rotate(28 110 140)"/>
+    <ellipse cx="1400" cy="460" rx="85"  ry="140" fill="#8FD2DD" opacity="0.30" transform="rotate(-12 1400 460)"/>
+    <ellipse cx="620"  cy="890" rx="170" ry="75"  fill="#8FD2DD" opacity="0.28" transform="rotate(8 620 890)"/>
+    <!-- Green/mint accent -->
+    <ellipse cx="790"  cy="30"  rx="130" ry="58"  fill="#86BF9F" opacity="0.32" transform="rotate(-6 790 30)"/>
+    <ellipse cx="280"  cy="860" rx="105" ry="68"  fill="#86BF9F" opacity="0.26" transform="rotate(22 280 860)"/>
+    <!-- Extra small accent blobs -->
+    <ellipse cx="480"  cy="60"  rx="60"  ry="40"  fill="#F77761" opacity="0.22" transform="rotate(15 480 60)"/>
+    <ellipse cx="1200" cy="700" rx="70"  ry="45"  fill="#8FD2DD" opacity="0.25" transform="rotate(-20 1200 700)"/>
+  </g>
+</svg>
+
+<main class="app-shell">
+
+  <!-- ===== TOPBAR ===== -->
+  <header class="topbar">
+    <div class="brand-mark">
+      <img class="brand-icon2" src="/static/icon2-only.png" alt="" aria-hidden="true" />
+      <img class="brand-name-img" src="/static/name-text.png" alt="emobridge" />
+    </div>
+
+    <nav class="view-tabs" aria-label="Primary navigation">
+      <button class="tab-button is-active" type="button" data-view="homeView"    data-i18n="nav.home">首页</button>
+      <button class="tab-button"           type="button" data-view="journalView" data-i18n="nav.journal">日记</button>
+      <button class="tab-button"           type="button" data-view="bodyView"    data-i18n="nav.body">身体感受</button>
+      <button class="tab-button"           type="button" data-view="dataView"    data-i18n="nav.data">数据</button>
+    </nav>
+
+    <div class="topbar-right">
+      <button class="lang-btn" id="langToggle" title="Switch language">EN</button>
+      <label class="privacy-toggle">
+        <input id="privacyMode" type="checkbox" checked />
+        <span data-i18n="topbar.local">本地模式</span>
+      </label>
+    </div>
+  </header>
+
+  <!-- ===== RESEARCH PANEL ===== -->
+  <details class="participant-panel" id="participantPanel">
+    <summary data-i18n="research.title">研究模式</summary>
+    <form class="participant-form" id="participantForm">
+      <label class="participant-code-control" for="participantCode">
+        <span data-i18n="research.code">实验编号</span>
+        <input id="participantCode" type="text" placeholder="例如 P001" autocomplete="off" />
+      </label>
+      <label class="participant-consent">
+        <input id="participantConsent" type="checkbox" checked />
+        <span data-i18n="research.consent">同意保存日记和操作日志用于研究分析</span>
+      </label>
+      <button class="warm-btn primary" type="submit" id="participantLogin" data-i18n="research.connect">进入记录</button>
+      <button class="warm-btn ghost" type="button" id="exportParticipantJson" data-i18n="research.exportJson">导出 JSON</button>
+      <button class="warm-btn ghost" type="button" id="exportParticipantCsv" data-i18n="research.exportCsv">导出 CSV</button>
+      <span class="participant-status" id="participantStatus" data-i18n="research.status">未连接实验编号，本机临时保存。</span>
+    </form>
+  </details>
+
+  <!-- ===================================================
+       HOME VIEW
+       =================================================== -->
+  <section class="view is-active" id="homeView" aria-labelledby="homeTitle">
+
+    <div class="home-top">
+
+      <!-- Interactive Color Mix Game — 4:3, centered, background shows on sides -->
+      <div class="game-outer">
+        <div class="game-wrap">
+          <iframe
+            src="/static/game.html"
+            class="game-iframe"
+            title="Color Mix Game"
+            frameborder="0"
+            scrolling="no">
+          </iframe>
+        </div>
+      </div>
+
+      <!-- Hero text block -->
+      <div class="hero-text-block">
+        <h1 id="homeTitle" data-i18n="home.title">感受你的情绪</h1>
+        <p data-i18n="home.subtitle">写下或说出今天发生的事，EmoBridge 会把你的情绪转化成流动的文字与色彩。</p>
+        <button class="warm-btn primary" type="button" data-view="journalView" data-i18n="home.cta">开始今天的记录</button>
+      </div>
+
+    </div>
+
+    <!-- Stats -->
+    <div class="home-stats">
+      <article class="stat-card">
+        <span class="stat-label" data-i18n="home.stat.entries">记录条数</span>
+        <strong class="stat-value" id="entryCount">0</strong>
+        <small id="entryStorageMode" data-i18n="home.stat.localOnly">仅本地</small>
+      </article>
+      <article class="stat-card">
+        <span class="stat-label" data-i18n="home.stat.latest">最新情绪</span>
+        <strong class="stat-value" id="latestEmotion" style="font-size:clamp(18px,2.8vw,30px);">中性</strong>
+        <small id="latestConfidence" data-i18n="home.stat.waiting">等待输入</small>
+      </article>
+      <article class="stat-card">
+        <span class="stat-label" data-i18n="home.stat.intensity">镜像强度</span>
+        <strong class="stat-value" id="homeIntensity">80%</strong>
+        <small data-i18n="home.stat.intensityHint">可在日记页调整</small>
+      </article>
+    </div>
+
+    <!-- Recent entries -->
+    <section class="warm-card" aria-labelledby="recentTitle" style="margin-top:0">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow" data-i18n="home.recent.eyebrow">从新到旧</p>
+          <h2 id="recentTitle" data-i18n="home.recent.title">情绪日记</h2>
+        </div>
+        <button class="warm-btn ghost" type="button" id="clearEntries" data-i18n="home.recent.clear">清除本地记录</button>
+      </div>
+      <div class="entry-list" id="entryList"></div>
+    </section>
+
+  </section>
+
+  <!-- ===================================================
+       JOURNAL VIEW
+       =================================================== -->
+  <section class="view" id="journalView" aria-labelledby="journalTitle">
+    <div class="journal-layout">
+
+      <!-- Editor pane -->
+      <section class="editor-pane">
+        <div class="section-head">
           <div>
-            <strong>EmoMirror</strong>
-            <span>emotion journal</span>
+            <p class="eyebrow" data-i18n="journal.eyebrow">表达性写作</p>
+            <h2 id="journalTitle" data-i18n="journal.title">今天的记录</h2>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
+            <span class="status-pill" id="analysisStatus" data-i18n="journal.ready">就绪</span>
+            <span id="journalDateDisplay" style="font-size:13px;color:var(--muted);font-weight:600;white-space:nowrap;"></span>
           </div>
         </div>
 
-        <nav class="view-tabs" aria-label="Primary">
-          <button class="tab-button is-active" type="button" data-view-target="homeView">Home</button>
-          <button class="tab-button" type="button" data-view-target="journalView">Journal</button>
-        </nav>
+        <div class="input-mode-row" role="group">
+          <button class="mode-button is-active" type="button" id="typingMode" data-i18n="journal.modeType">文字输入</button>
+          <button class="mode-button" type="button" id="voiceMode" data-i18n="journal.modeVoice">语音转文字</button>
+        </div>
 
-        <label class="privacy-toggle">
-          <input id="privacyMode" type="checkbox" checked />
-          <span>Local mode</span>
-        </label>
-      </header>
+        <textarea
+          id="journalText"
+          spellcheck="true"
+          data-i18n-placeholder="journal.placeholder"
+          placeholder="写下发生了什么。可以具体、模糊、矛盾，或者不确定。"
+        >今天我一直说没事，但开完会之后胸口有点紧。</textarea>
 
-      <section class="participant-panel" aria-label="Research participant session">
-        <form class="participant-form" id="participantForm">
-          <label class="participant-code-control" for="participantCode">
-            <span>实验编号</span>
-            <input id="participantCode" type="text" placeholder="例如 P001" autocomplete="off" />
+        <div class="editor-tools">
+          <label class="slider-control" for="intensityRange">
+            <span data-i18n="journal.intensity">镜像反馈强度</span>
+            <input id="intensityRange" type="range" min="0" max="100" value="80" />
           </label>
-          <label class="participant-consent">
-            <input id="participantConsent" type="checkbox" checked />
-            <span>同意保存日记和操作日志用于研究分析</span>
-          </label>
-          <button class="primary-button" type="submit" id="participantLogin">进入记录</button>
-          <button class="ghost-button" type="button" id="exportParticipantJson">导出 JSON</button>
-          <button class="ghost-button" type="button" id="exportParticipantCsv">导出 CSV</button>
-          <span class="participant-status" id="participantStatus">未连接实验编号，本机会先临时保存。</span>
-        </form>
+          <button class="warm-btn ghost" type="button" id="voiceButton" data-i18n="journal.startVoice">开始语音</button>
+          <button class="warm-btn primary" type="button" id="saveEntry" data-i18n="journal.save">保存记录</button>
+        </div>
       </section>
 
-      <section class="view is-active" id="homeView" aria-labelledby="homeTitle">
-        <div class="home-hero">
-          <div class="hero-copy">
-            <p class="eyebrow">Today&apos;s mirror</p>
-            <h1 id="homeTitle">A softer way to notice what you feel.</h1>
-            <p class="support-text">
-              Write or speak. EmoMirror turns subtle emotional signals into living type, then helps you name them in your own words.
-            </p>
-            <button class="primary-button" type="button" data-view-target="journalView">
-              Start today&apos;s entry
-            </button>
+      <!-- Mirror pane -->
+      <section class="mirror-pane" aria-labelledby="mirrorTitle">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow" data-i18n="journal.mirror.eyebrow">情绪动态字体</p>
+            <h2 id="mirrorTitle" data-i18n="journal.mirror.title">实时镜像</h2>
           </div>
+          <span class="emotion-dot" id="emotionDot" aria-hidden="true"></span>
+        </div>
 
-          <div class="mirror-surface" aria-label="Emotion mirror preview">
-            <div class="mirror-lines" aria-hidden="true"></div>
-            <div class="mirror-word" id="homeMirrorWord">steady</div>
-            <div class="mirror-caption" id="homeMirrorCaption">No entry yet today</div>
+        <div class="type-stage" id="typeStage" aria-live="polite"></div>
+
+        <div class="emotion-panel">
+          <div>
+            <span class="panel-label" data-i18n="journal.detected">识别结果</span>
+            <strong id="primaryEmotion">不明确</strong>
+            <p class="coordinate-summary" id="reflectionText"></p>
+          </div>
+          <div class="confidence-meter" aria-label="Confidence">
+            <i id="confidenceMeter"></i>
           </div>
         </div>
 
-        <div class="home-grid">
-          <article class="stat-card">
-            <span>Entries</span>
-            <strong id="entryCount">0</strong>
-            <small id="entryStorageMode">local only</small>
-          </article>
-          <article class="stat-card">
-            <span>Latest label</span>
-            <strong id="latestEmotion">Unclear</strong>
-            <small id="latestConfidence">waiting for text</small>
-          </article>
-          <article class="stat-card">
-            <span>Mirror intensity</span>
-            <strong id="homeIntensity">80%</strong>
-            <small>adjustable in journal</small>
-          </article>
+        <div class="chip-row" id="emotionChips" aria-label="候选情绪标签"></div>
+
+        <div class="label-editor" aria-label="自定义情绪标签">
+          <label class="custom-label-control" for="customEmotionLabel">
+            <span data-i18n="journal.customLabel">自定义标签</span>
+            <input id="customEmotionLabel" type="text"
+              data-i18n-placeholder="journal.customPlaceholder"
+              placeholder="输入更贴近的情绪词"
+              autocomplete="off" />
+          </label>
+          <button class="warm-btn ghost" type="button" id="applyCustomLabel" data-i18n="journal.apply">应用</button>
         </div>
 
-        <section class="home-band" aria-labelledby="recentTitle">
-          <div class="section-head">
-            <div>
-              <p class="eyebrow">Recent reflections</p>
-              <h2 id="recentTitle">Your last entries</h2>
-            </div>
-            <button class="ghost-button" type="button" id="clearEntries">Clear local entries</button>
+        <section class="va-control" aria-label="V-A 坐标">
+          <div class="va-control-head">
+            <span class="panel-label" data-i18n="journal.va">V-A 坐标</span>
+            <strong id="vaReadout">V +0.00 · A +0.00</strong>
           </div>
-          <div class="entry-list" id="entryList"></div>
+          <div class="va-plane" id="vaPlane" role="slider" tabindex="0" aria-label="Valence arousal handle">
+            <span class="va-axis va-axis-x"></span>
+            <span class="va-axis va-axis-y"></span>
+            <span class="va-axis-label va-positive" data-i18n="va.positive">积极</span>
+            <span class="va-axis-label va-negative" data-i18n="va.negative">消极</span>
+            <span class="va-axis-label va-high" data-i18n="va.high">高能量</span>
+            <span class="va-axis-label va-low" data-i18n="va.low">低能量</span>
+            <button class="va-handle" id="vaHandle" type="button" aria-label="坐标拖拽手柄"></button>
+          </div>
         </section>
       </section>
 
-      <section class="view" id="journalView" aria-labelledby="journalTitle">
-        <div class="journal-layout">
-          <section class="editor-pane">
-            <div class="section-head">
-              <div>
-                <p class="eyebrow">Expressive writing</p>
-                <h2 id="journalTitle">Today&apos;s entry</h2>
-              </div>
-              <span class="status-pill" id="analysisStatus">Ready</span>
-            </div>
+    </div>
+  </section>
 
-            <div class="input-mode-row" role="group" aria-label="Input mode">
-              <button class="mode-button is-active" type="button" id="typingMode">Type</button>
-              <button class="mode-button" type="button" id="voiceMode">Voice to text</button>
-            </div>
+  <!-- ===================================================
+       BODY VIEW
+       =================================================== -->
+  <section class="view" id="bodyView" aria-labelledby="bodyTitle">
 
-            <textarea
-              id="journalText"
-              spellcheck="true"
-              placeholder="Write what happened. You can be specific, vague, contradictory, or unsure."
-            >Today I kept saying it was fine, but my chest felt tight after the meeting.</textarea>
+    <div style="margin-bottom:14px;">
+      <p class="eyebrow" data-i18n="body.eyebrow">情绪与身体</p>
+      <h2 id="bodyTitle" data-i18n="body.title">身体感受</h2>
+      <p style="color:var(--muted);font-size:14px;margin:6px 0 0;" data-i18n="body.subtitle">选择身体不适部位和感受，结合最近日记，生成温和缓解提示。</p>
+    </div>
 
-            <div class="editor-tools">
-              <label class="slider-control" for="intensityRange">
-                <span>Feedback intensity</span>
-                <input id="intensityRange" type="range" min="0" max="100" value="80" />
-              </label>
-              <button class="ghost-button" type="button" id="voiceButton">Start voice</button>
-              <button class="primary-button" type="button" id="saveEntry">Save entry</button>
-            </div>
-          </section>
+    <div class="body-layout">
 
-          <section class="mirror-pane" aria-labelledby="mirrorTitle">
-            <div class="section-head">
-              <div>
-                <p class="eyebrow">Kinetic affective type</p>
-                <h2 id="mirrorTitle">Live mirror</h2>
-              </div>
-              <span class="emotion-dot" id="emotionDot" aria-hidden="true"></span>
-            </div>
+      <!-- Left: body diagram placeholder -->
+      <div class="body-diagram-wrap">
+        <div class="warm-card red" style="padding:14px;flex:1;display:flex;flex-direction:column;gap:12px;">
+          <h3 style="font-size:14px;font-weight:800;color:var(--red);margin:0;" data-i18n="body.diagram">身体部位图</h3>
 
-            <div class="type-stage" id="typeStage" aria-live="polite"></div>
+          <!-- Body diagram: simple image display, no interaction -->
+          <div class="body-diagram-img-wrap" id="bodyDiagramWrap">
+            <img src="/static/people.svg" alt="Body diagram"
+                 style="width:100%;height:auto;display:block;" />
+          </div>
 
-            <div class="emotion-panel">
-              <div>
-                <span class="panel-label">识别结果</span>
-                <strong id="primaryEmotion">Unclear / gently mixed</strong>
-                <p class="coordinate-summary" id="reflectionText"></p>
-              </div>
-              <div class="confidence-meter" aria-label="Confidence">
-                <i id="confidenceMeter"></i>
-              </div>
-            </div>
-
-            <div class="chip-row" id="emotionChips" aria-label="Candidate emotion labels"></div>
-
-            <div class="label-editor" aria-label="Edit diary emotion label">
-              <label class="custom-label-control" for="customEmotionLabel">
-                <span>自定义标签</span>
-                <input id="customEmotionLabel" type="text" placeholder="输入更贴近的情绪词" autocomplete="off" />
-              </label>
-              <button class="ghost-button" type="button" id="applyCustomLabel">应用标签</button>
-            </div>
-
-            <section class="va-control" aria-label="Valence arousal coordinate">
-              <div class="va-control-head">
-                <span class="panel-label">V-A 坐标</span>
-                <strong id="vaReadout">V 0.00 · A 0.00</strong>
-              </div>
-              <div class="va-plane" id="vaPlane" role="slider" tabindex="0" aria-label="Valence and arousal position">
-                <span class="va-axis va-axis-x"></span>
-                <span class="va-axis va-axis-y"></span>
-                <span class="va-axis-label va-positive">积极</span>
-                <span class="va-axis-label va-negative">消极</span>
-                <span class="va-axis-label va-high">高能量</span>
-                <span class="va-axis-label va-low">低能量</span>
-                <button class="va-handle" id="vaHandle" type="button" aria-label="Emotion coordinate handle"></button>
-              </div>
-            </section>
-          </section>
+          <!-- Selected pairs -->
+          <div>
+            <div class="panel-label" style="margin-bottom:8px;" data-i18n="body.selected">已选组合</div>
+            <div id="bodyPairsView" class="body-selected-pairs" style="color:var(--muted-light);font-size:13px;" data-i18n="body.noPairs">暂无</div>
+          </div>
         </div>
-      </section>
-    </main>
+      </div>
 
-    <script src="/static/vaMapper.js?v=20260527-emoji1" defer></script>
-    <script src="/static/app.js?v=20260527-emoji1" defer></script>
-  
-<a
-  id="body-sensation-entry"
-  href="/body-sensation"
-  style="
-    position: fixed;
-    right: 18px;
-    bottom: 18px;
-    z-index: 9999;
-    background: #2563eb;
-    color: #fff;
-    padding: 12px 16px;
-    border-radius: 999px;
-    text-decoration: none;
-    font-family: Arial, 'Microsoft YaHei', sans-serif;
-    font-size: 14px;
-    box-shadow: 0 10px 24px rgba(37, 99, 235, 0.25);
-  "
->
-  身体感受
-</a>
+      <!-- Right: controls -->
+      <div class="body-controls">
 
+        <!-- Journal text reference -->
+        <div class="warm-card" style="padding:14px;">
+          <h3 data-i18n="body.journalRef">当前日记参考</h3>
+          <textarea id="bodyJournalText" style="min-height:70px;font-size:13px;margin-top:6px;"
+            data-i18n-placeholder="body.journalRefPlaceholder"
+            placeholder="填写当前的日记内容（可选）"></textarea>
+        </div>
 
-<script>
-(function () {
-  const BODY_PARTICIPANT_STORAGE_KEY = "emotype_participant_code";
+        <!-- Region selection -->
+        <div class="warm-card" style="padding:14px;">
+          <h3 data-i18n="body.selectRegion">选择部位</h3>
+          <div id="bodyRegionChips" class="chip-row" style="margin-top:6px;gap:6px;"></div>
+        </div>
 
-  function cleanCode(value) {
-    return String(value || "").trim();
-  }
+        <!-- Symptom selection -->
+        <div class="warm-card" style="padding:14px;">
+          <h3 data-i18n="body.selectSymptom">选择感受</h3>
+          <div id="bodySymptomChips" class="chip-row" style="margin-top:6px;gap:6px;"></div>
+        </div>
 
-  function looksLikeParticipantCode(value) {
-    value = cleanCode(value);
-    return /^[A-Za-z0-9_-]{1,64}$/.test(value);
-  }
+        <!-- Severity + duration -->
+        <div class="warm-card" style="padding:14px;">
+          <h3 data-i18n="body.details">详细信息</h3>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px;">
+            <label class="severity-control">
+              <span data-i18n="body.severity">程度</span>
+              <input type="range" id="bodySeverity" min="1" max="5" value="3" />
+              <span id="bodySeverityLabel" style="font-size:12px;color:var(--red);">3 / 5</span>
+            </label>
+            <label class="slider-control">
+              <span data-i18n="body.duration">持续时间</span>
+              <input type="text" id="bodyDuration" value="下午开始"
+                style="min-height:36px;border:1.5px dashed rgba(239,68,68,0.3);border-radius:8px;padding:0 10px;background:#fff;outline:none;font-size:13px;" />
+            </label>
+          </div>
+          <button class="warm-btn" type="button" id="bodyAddPair"
+            style="margin-top:10px;background:var(--red-bg);color:var(--red);border:1.5px dashed var(--red);border-radius:8px;font-weight:700;font-size:13px;min-height:36px;padding:0 14px;"
+            data-i18n="body.addPair">加入组合</button>
+          <button class="warm-btn ghost" type="button" id="bodyClearPairs"
+            style="margin-left:8px;font-size:13px;min-height:36px;" data-i18n="body.clearPairs">清空</button>
+        </div>
 
-  function resolveParticipantCodeForBodySensation() {
-    const explicitSelectors = [
-      "#participantCode",
-      "#participant-code",
-      "#participant_code",
-      "[name='participant_code']",
-      "[name='participantCode']"
-    ];
+        <!-- Free text -->
+        <div class="warm-card" style="padding:14px;">
+          <h3 data-i18n="body.describe">补充描述</h3>
+          <textarea id="bodyFreeText" style="min-height:70px;font-size:13px;margin-top:6px;border-color:rgba(239,68,68,0.25);"
+            data-i18n-placeholder="body.describePlaceholder"
+            placeholder="今天喝水较少，坐着学习了很久…"></textarea>
+        </div>
 
-    for (const selector of explicitSelectors) {
-      const node = document.querySelector(selector);
-      if (node && looksLikeParticipantCode(node.value)) {
-        return cleanCode(node.value);
-      }
-    }
+        <!-- Submit -->
+        <div class="body-submit-wrap">
+          <button class="warm-btn red" type="button" id="bodySubmitBtn" data-i18n="body.generate">生成身体感受建议</button>
+          <span class="body-submit-status" id="bodySubmitStatus" data-i18n="body.statusHint">系统会综合身体感受和最近日记。</span>
+        </div>
 
-    const storageKeys = [
-      BODY_PARTICIPANT_STORAGE_KEY,
-      "participant_code",
-      "participantCode",
-      "currentParticipantCode",
-      "emomirror_participant_code",
-      "emotype_participant_code"
-    ];
+      </div>
+    </div>
 
-    for (const key of storageKeys) {
-      try {
-        const value = localStorage.getItem(key);
-        if (looksLikeParticipantCode(value)) {
-          return cleanCode(value);
-        }
-      } catch (error) {}
-    }
+    <!-- Advice output -->
+    <div class="warm-card green body-advice" id="bodyAdvice" style="display:none;margin-top:6px;"></div>
 
-    // Fallback: scan visible small input values.
-    const inputs = Array.from(document.querySelectorAll("input"));
-    for (const input of inputs) {
-      const value = cleanCode(input.value);
-      if (looksLikeParticipantCode(value)) {
-        return value;
-      }
-    }
+  </section>
 
-    return "";
-  }
+  <!-- ===================================================
+       DATA VIEW
+       =================================================== -->
+  <section class="view" id="dataView" aria-labelledby="dataTitle">
 
-  function attachBodySensationEntrySync() {
-    const link = document.getElementById("body-sensation-entry");
-    if (!link) return;
+    <div style="margin-bottom:14px;">
+      <p class="eyebrow" data-i18n="data.eyebrow">数据与洞察</p>
+      <h2 id="dataTitle" data-i18n="data.title">情绪数据</h2>
+    </div>
 
-    link.addEventListener("click", function () {
-      const code = resolveParticipantCodeForBodySensation();
-      if (!code) return;
+    <!-- Charts: side-by-side on wide screens -->
+    <div class="data-chart-area">
+      <div class="warm-card">
+        <div class="section-head" style="margin-bottom:10px;">
+          <h3 style="font-size:17px;font-weight:800;" data-i18n="data.emotionFreq">情绪频率分布</h3>
+          <button class="warm-btn ghost" type="button" id="refreshCharts" style="font-size:12px;min-height:32px;padding:0 12px;" data-i18n="data.refresh">刷新</button>
+        </div>
+        <div class="data-chart-wrap">
+          <canvas id="emotionChart"></canvas>
+          <div class="data-no-data" id="chartNoData" style="display:none;" data-i18n="data.noData">暂无记录，先去写日记吧 ✏️</div>
+        </div>
+      </div>
 
-      try {
-        localStorage.setItem(BODY_PARTICIPANT_STORAGE_KEY, code);
-        localStorage.setItem("participant_code", code);
-        localStorage.setItem("participantCode", code);
-      } catch (error) {}
+      <div class="warm-card blue">
+        <h3 style="font-size:17px;font-weight:800;margin-bottom:10px;" data-i18n="data.vaHistory">V-A 坐标历史</h3>
+        <div class="data-chart-wrap">
+          <canvas id="vaChart"></canvas>
+          <div class="data-no-data" id="vaChartNoData" style="display:none;" data-i18n="data.noData">暂无记录，先去写日记吧 ✏️</div>
+        </div>
+      </div>
+    </div>
 
-      link.href = "/body-sensation?participant_code=" + encodeURIComponent(code);
-    });
-  }
+    <!-- Tools row: export + summary + clear (below charts) -->
+    <div class="data-tools-row">
+      <div class="warm-card" style="padding:16px;flex:1;">
+        <h3 style="font-size:14px;font-weight:800;margin-bottom:10px;" data-i18n="data.summary">记录摘要</h3>
+        <div id="dataSummary" style="font-size:13px;color:var(--muted);line-height:1.8;"></div>
+      </div>
+      <div class="warm-card" style="padding:16px;flex:0 0 auto;min-width:200px;">
+        <h3 style="font-size:14px;font-weight:800;margin-bottom:10px;" data-i18n="data.export">导出数据</h3>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <button class="warm-btn primary" type="button" id="exportParticipantJson" style="width:100%;" data-i18n="research.exportJson">导出 JSON</button>
+          <button class="warm-btn ghost" type="button" id="exportParticipantCsv" style="width:100%;" data-i18n="research.exportCsv">导出 CSV</button>
+          <button class="warm-btn ghost" type="button" id="clearEntriesData"
+            style="border-color:var(--red);color:var(--red);font-size:13px;margin-top:4px;" data-i18n="home.recent.clear">清除本地记录</button>
+        </div>
+      </div>
+    </div>
+  </section>
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", attachBodySensationEntrySync);
-  } else {
-    attachBodySensationEntrySync();
-  }
-})();
-</script>
+</main>
 
+<!-- Chart.js via CDN (jsDelivr works in China) -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="/static/vaMapper.js?v=20260602j" defer></script>
+<script src="/static/app.js?v=20260602j" defer></script>
 </body>
 </html>
