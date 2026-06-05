@@ -165,14 +165,29 @@ async def index():
     return FileResponse(STATIC_DIR / "index.html")
 
 
+@app.head("/", include_in_schema=False)
+async def index_head():
+    return Response(status_code=200, media_type="text/html")
+
+
 @app.get("/diary", include_in_schema=False)
 async def diary_page():
     return FileResponse(STATIC_DIR / "diary.html")
 
 
+@app.head("/diary", include_in_schema=False)
+async def diary_page_head():
+    return Response(status_code=200, media_type="text/html")
+
+
 @app.get("/review", include_in_schema=False)
 async def review_page():
     return FileResponse(STATIC_DIR / "review.html")
+
+
+@app.head("/review", include_in_schema=False)
+async def review_page_head():
+    return Response(status_code=200, media_type="text/html")
 
 # -----------------------------
 # Globals
@@ -1628,10 +1643,19 @@ class BodySensationAdviceRequest(BaseModel):
 
 
 
+@app.get("/body")
 @app.get("/body-sensation")
+@app.get("/body_sensation")
 async def body_sensation_page():
     page_path = Path(__file__).resolve().parent / "static" / "body_sensation.html"
     return FileResponse(page_path)
+
+
+@app.head("/body")
+@app.head("/body-sensation")
+@app.head("/body_sensation")
+async def body_sensation_page_head():
+    return Response(status_code=200, media_type="text/html")
 
 @app.post("/body-sensation/advice")
 async def body_sensation_advice(payload: BodySensationAdviceRequest):

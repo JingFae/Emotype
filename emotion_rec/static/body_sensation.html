@@ -1,749 +1,142 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8" />
-  <title>身体感受</title>
-  <style>
-    body { margin:0; font-family: Arial, "Microsoft YaHei", sans-serif; background:#f6f7fb; color:#172033; }
-    main { max-width:1120px; margin:0 auto; padding:24px 16px 60px; }
-    .card { background:#fff; border:1px solid #e5e7eb; border-radius:16px; padding:16px; margin-bottom:14px; }
-    .grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
-    .buttons { display:flex; flex-wrap:wrap; gap:8px; margin:8px 0 12px; }
-    button { border:1px solid #d0d5dd; background:#fff; border-radius:999px; padding:8px 12px; cursor:pointer; }
-    button.selected { background:#111827; color:#fff; border-color:#111827; }
-    button.primary { border-radius:10px; background:#2563eb; color:#fff; border-color:#2563eb; font-weight:700; }
-    button.loading { background:#64748b; border-color:#64748b; color:#fff; cursor:wait; }
-    button.done { background:#16a34a; border-color:#16a34a; color:#fff; }
-    button.error { background:#dc2626; border-color:#dc2626; color:#fff; }
-    button:disabled { opacity:0.8; cursor:not-allowed; }
-    button.danger { border-radius:10px; background:#fee2e2; color:#991b1b; border-color:#fecaca; }
-    textarea, input, select { width:100%; box-sizing:border-box; border:1px solid #d0d5dd; border-radius:10px; padding:10px; font-size:14px; }
-    textarea { min-height:86px; resize:vertical; }
-    .pair { display:flex; justify-content:space-between; gap:10px; align-items:center; border:1px solid #e5e7eb; border-radius:12px; padding:10px; margin:8px 0; }
-    .hint { color:#667085; font-size:13px; line-height:1.6; }
-    .output { white-space:pre-wrap; background:#0b1020; color:#e5e7eb; border-radius:12px; padding:12px; max-height:520px; overflow:auto; font-family:Consolas, monospace; font-size:13px; }
-    li { margin:6px 0; line-height:1.6; }
-    @media(max-width:800px) { .grid { grid-template-columns:1fr; } }
-  </style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>身体感受 | EmoBridge</title>
+  <link rel="stylesheet" href="/static/styles.css?v=20260605" />
+  <link rel="stylesheet" href="/static/body_sensation.css?v=body_v2" />
 </head>
-<body>
-<main>
-  <div class="card">
-    <h1>身体感受</h1>
-    <div class="hint">选择身体不适的部位和感受，系统会结合最近日记，生成温和、具体的缓解提示。</div>
-    <div class="hint"><a href="/">返回情绪日记</a></div>
-  </div>
+<body class="body-sensation-page">
+<main class="app-shell body-page-shell">
+  <header class="topbar body-topbar">
+    <a class="brand-mark" href="/" aria-label="EmoBridge 首页">
+      <img class="brand-icon2" src="/static/icon2-only.png" alt="" aria-hidden="true" />
+      <img class="brand-name-img" src="/static/name-text.png" alt="emobridge" />
+    </a>
 
-  
-  <section class="card" id="recentDiariesPanel">
-    <h2>最近日记回顾</h2>
-    <div class="hint">
-      你可以回顾最近多条日记，但不需要判断是哪一条导致了身体不适。系统会综合最近日记和本次身体感受，判断哪些线索可能相关。
+    <nav class="view-tabs" aria-label="Primary navigation">
+      <a class="tab-button" href="/">首页</a>
+      <a class="tab-button" href="/#journalView">随手记</a>
+      <a class="tab-button" href="/diary">日记本</a>
+      <a class="tab-button" href="/review">情绪复盘</a>
+      <a class="tab-button is-active" href="/body-sensation" aria-current="page">身体感受</a>
+    </nav>
+
+    <div class="topbar-right body-session">
+      <span class="body-session-label">Body Sense</span>
+      <span class="status-pill" id="bodyParticipantBadge">local</span>
     </div>
-    <div style="margin:10px 0;">
-      <button onclick="loadRecentDiaries()">加载最近日记</button>
-      <span id="diaryStatus" class="hint">尚未加载</span>
+  </header>
+
+  <section class="body-heading" aria-labelledby="bodyTitle">
+    <div>
+      <p class="eyebrow">Emotion & Body</p>
+      <h1 id="bodyTitle">身体感受</h1>
+      <p>选择身体部位和感受，系统会结合最近记录生成温和、非诊断式的缓解提示。</p>
     </div>
-    <div id="diaryTabs" class="buttons"></div>
-    <textarea id="diaryPreview" placeholder="点击某条日记后在这里预览；这里只用于回顾，不代表选择原因" style="min-height:90px;"></textarea>
+    <div class="body-heading-actions">
+      <label class="body-participant-control" for="bodyParticipantCode">
+        <span>实验编号</span>
+        <input id="bodyParticipantCode" type="text" autocomplete="off" placeholder="local 或 P001" />
+      </label>
+      <button class="warm-btn ghost" type="button" id="bodyRefreshContextBtn">读取最近记录</button>
+    </div>
   </section>
 
-  <div class="grid">
-    <section class="card">
-      <h2>1. 基础输入</h2>
-      <label>Participant Code</label>
-      <input id="participantCode" value="P1234" />
+  <section class="body-page-layout" aria-label="身体感受工作区">
+    <aside class="body-figure-panel" aria-labelledby="bodyFigureTitle">
+      <div class="body-panel-head">
+        <div>
+          <p class="eyebrow">Body Map</p>
+          <h2 id="bodyFigureTitle">身体部位</h2>
+        </div>
+        <span class="body-state-pill" id="bodyPairCount">0 组</span>
+      </div>
+      <div class="body-figure-wrap">
+        <img src="/static/people.svg" alt="身体部位示意图" />
+      </div>
+      <section class="body-selected-panel" aria-labelledby="selectedPairsTitle">
+        <div class="panel-label" id="selectedPairsTitle">已选组合</div>
+        <div class="body-selected-pairs-v2" id="bodySelectedPairs">暂无</div>
+      </section>
+    </aside>
 
-      <label>当前日记文本</label>
-      <textarea id="journalText">我今天起床晚了，午饭吃得很少，下午高强度学习之后有点头晕。</textarea>
+    <section class="body-input-column" aria-labelledby="bodyInputTitle">
+      <div class="body-card">
+        <div class="body-panel-head compact">
+          <div>
+            <p class="eyebrow">Context</p>
+            <h2 id="bodyInputTitle">当前记录参考</h2>
+          </div>
+          <span class="body-state-pill" id="bodyContextState">未读取</span>
+        </div>
+        <textarea id="bodyJournalText" placeholder="可以粘贴今天的随手记、正式日记片段，或留空让系统只根据本次身体感受生成建议。"></textarea>
+        <div class="body-context-list" id="bodyRecentContext"></div>
+      </div>
 
-      <label>补充描述</label>
-      <textarea id="freeText">今天喝水也比较少，坐着学习了很久。</textarea>
+      <div class="body-card">
+        <div class="body-panel-head compact">
+          <div>
+            <p class="eyebrow">Region</p>
+            <h2>选择部位</h2>
+          </div>
+        </div>
+        <div class="body-chip-grid" id="bodyRegionChips"></div>
+      </div>
 
-      <label>严重程度</label>
-      <select id="severity">
-        <option value="1">1 - 很轻</option>
-        <option value="2">2 - 较轻</option>
-        <option value="3" selected>3 - 中等</option>
-        <option value="4">4 - 明显</option>
-        <option value="5">5 - 很严重</option>
-      </select>
+      <div class="body-card">
+        <div class="body-panel-head compact">
+          <div>
+            <p class="eyebrow">Sensation</p>
+            <h2>选择感受</h2>
+          </div>
+        </div>
+        <div class="body-chip-grid" id="bodySymptomChips"></div>
+      </div>
 
-      <label>持续时间</label>
-      <input id="duration" value="下午开始" />
+      <div class="body-card">
+        <div class="body-detail-grid">
+          <label class="body-range-control" for="bodySeverity">
+            <span>程度</span>
+            <input id="bodySeverity" type="range" min="1" max="5" value="3" />
+            <strong id="bodySeverityLabel">3 / 5</strong>
+          </label>
+          <label class="body-text-control" for="bodyDuration">
+            <span>持续时间</span>
+            <input id="bodyDuration" type="text" value="下午开始" autocomplete="off" />
+          </label>
+        </div>
+        <label class="body-text-control body-free-text" for="bodyFreeText">
+          <span>补充描述</span>
+          <textarea id="bodyFreeText" placeholder="例如：今天喝水较少、久坐、睡眠不足，或某个时段更明显。"></textarea>
+        </label>
+        <div class="body-actions">
+          <button class="warm-btn ghost" type="button" id="bodyAddPairBtn">加入组合</button>
+          <button class="warm-btn ghost" type="button" id="bodyClearPairsBtn">清空</button>
+          <button class="warm-btn red" type="button" id="bodySubmitBtn">生成身体感受建议</button>
+        </div>
+        <p class="body-submit-status" id="bodySubmitStatus">系统会综合身体感受和最近记录。</p>
+      </div>
     </section>
 
-    <section class="card">
-      <h2>2. 选择部位</h2>
-      <div id="regionButtons" class="buttons"></div>
-
-      <h2>3. 选择感受</h2>
-      <div id="symptomButtons" class="buttons"></div>
-
-      <button class="primary" onclick="addPair()">加入组合</button>
-      <button onclick="clearPairs()">清空组合</button>
-
-      <h2>已选组合</h2>
-      <div id="pairsView" class="hint">暂无</div>
-    </section>
-  </div>
-
-  <div class="card">
-    <button id="submitAdviceBtn" class="primary" onclick="submitAdvice()">生成身体感受建议</button>
-    <span id="submitStatus" class="hint">系统会综合本次身体感受和最近多条日记。</span>
-  </div>
-
-  <section id="adviceCard" class="card" style="display:none;">
-    <h2>建议展示</h2>
-    <div id="adviceView"></div>
-  </section>
-
-  <section class="card" style="display:none;">
-    <h2>开发调试信息</h2>
-    <div id="rawOutput" class="output">Waiting...</div>
+    <aside class="body-advice-column">
+      <article class="body-advice-card" id="bodyAdviceCard" aria-labelledby="bodyAdviceTitle">
+        <div class="body-panel-head">
+          <div>
+            <p class="eyebrow">Advice</p>
+            <h2 id="bodyAdviceTitle">建议展示</h2>
+          </div>
+          <span class="body-state-pill" id="bodyAdviceState">待生成</span>
+        </div>
+        <div class="body-advice-empty" id="bodyAdviceEmpty">
+          <p>选择至少一个身体感受组合后生成建议。建议会保持温和、非诊断式，并保留必要的就医提醒。</p>
+        </div>
+        <div class="body-advice-content" id="bodyAdviceContent"></div>
+      </article>
+    </aside>
   </section>
 </main>
-
-<script>
-const regions = [
-  {
-    "id": "head",
-    "label": "头部"
-  },
-  {
-    "id": "eyes",
-    "label": "眼部"
-  },
-  {
-    "id": "ears",
-    "label": "耳部"
-  },
-  {
-    "id": "nose_sinus",
-    "label": "鼻腔/鼻窦"
-  },
-  {
-    "id": "mouth_jaw",
-    "label": "口腔/下颌"
-  },
-  {
-    "id": "throat",
-    "label": "咽喉"
-  },
-  {
-    "id": "chest",
-    "label": "胸口/呼吸"
-  },
-  {
-    "id": "heart",
-    "label": "心跳/心前区"
-  },
-  {
-    "id": "shoulder_neck",
-    "label": "肩颈"
-  },
-  {
-    "id": "upper_back",
-    "label": "上背部"
-  },
-  {
-    "id": "lower_back",
-    "label": "腰背"
-  },
-  {
-    "id": "stomach",
-    "label": "胃部/上腹"
-  },
-  {
-    "id": "abdomen",
-    "label": "腹部/肠胃"
-  },
-  {
-    "id": "lower_abdomen_pelvis",
-    "label": "下腹/盆腔"
-  },
-  {
-    "id": "skin",
-    "label": "皮肤"
-  },
-  {
-    "id": "hands",
-    "label": "手部"
-  },
-  {
-    "id": "legs",
-    "label": "腿部"
-  },
-  {
-    "id": "whole_body",
-    "label": "全身"
-  }
-];
-const symptoms = [
-  {
-    "id": "headache",
-    "label": "头疼"
-  },
-  {
-    "id": "dizziness",
-    "label": "头晕"
-  },
-  {
-    "id": "brain_fog",
-    "label": "脑雾/注意力涣散"
-  },
-  {
-    "id": "eye_strain",
-    "label": "眼疲劳"
-  },
-  {
-    "id": "blurred_vision",
-    "label": "视物模糊"
-  },
-  {
-    "id": "dry_eyes",
-    "label": "眼干"
-  },
-  {
-    "id": "ear_ringing",
-    "label": "耳鸣"
-  },
-  {
-    "id": "nasal_congestion",
-    "label": "鼻塞"
-  },
-  {
-    "id": "jaw_tension",
-    "label": "下颌紧绷/咬牙"
-  },
-  {
-    "id": "throat_tightness",
-    "label": "喉咙紧"
-  },
-  {
-    "id": "dry_throat",
-    "label": "嗓子干"
-  },
-  {
-    "id": "chest_tightness",
-    "label": "胸闷"
-  },
-  {
-    "id": "palpitation",
-    "label": "心跳过快/心慌"
-  },
-  {
-    "id": "shortness_of_breath",
-    "label": "呼吸困难/气短"
-  },
-  {
-    "id": "stomach_cramp",
-    "label": "胃痉挛/胃痛"
-  },
-  {
-    "id": "acid_reflux",
-    "label": "反酸/烧心"
-  },
-  {
-    "id": "appetite_loss",
-    "label": "食欲下降"
-  },
-  {
-    "id": "nausea",
-    "label": "恶心"
-  },
-  {
-    "id": "diarrhea",
-    "label": "腹泻"
-  },
-  {
-    "id": "constipation",
-    "label": "便秘"
-  },
-  {
-    "id": "bloating",
-    "label": "腹胀"
-  },
-  {
-    "id": "lower_abdominal_cramp",
-    "label": "下腹痛/小腹坠胀"
-  },
-  {
-    "id": "menstrual_cramps",
-    "label": "经期腹痛/周期相关不适"
-  },
-  {
-    "id": "muscle_tension",
-    "label": "肌肉紧绷"
-  },
-  {
-    "id": "back_pain",
-    "label": "背痛/腰酸"
-  },
-  {
-    "id": "hand_shaking",
-    "label": "手抖"
-  },
-  {
-    "id": "cold_hands_feet",
-    "label": "手脚冰凉"
-  },
-  {
-    "id": "numbness",
-    "label": "麻木"
-  },
-  {
-    "id": "sweating",
-    "label": "出汗/冷汗"
-  },
-  {
-    "id": "fatigue",
-    "label": "疲惫/乏力"
-  },
-  {
-    "id": "sleepiness",
-    "label": "困倦"
-  },
-  {
-    "id": "insomnia",
-    "label": "失眠/入睡困难"
-  },
-  {
-    "id": "restlessness",
-    "label": "坐立不安"
-  },
-  {
-    "id": "skin_itching",
-    "label": "皮肤瘙痒"
-  }
-];
-
-let selectedRegion = regions[0];
-let selectedSymptom = symptoms[1];
-let pairs = [];
-
-function renderButtons() {
-  const regionBox = document.getElementById("regionButtons");
-  const symptomBox = document.getElementById("symptomButtons");
-  regionBox.innerHTML = "";
-  symptomBox.innerHTML = "";
-
-  regions.forEach(item => {
-    const btn = document.createElement("button");
-    btn.textContent = item.label + " / " + item.id;
-    btn.className = selectedRegion.id === item.id ? "selected" : "";
-    btn.onclick = () => { selectedRegion = item; renderButtons(); };
-    regionBox.appendChild(btn);
-  });
-
-  symptoms.forEach(item => {
-    const btn = document.createElement("button");
-    btn.textContent = item.label + " / " + item.id;
-    btn.className = selectedSymptom.id === item.id ? "selected" : "";
-    btn.onclick = () => { selectedSymptom = item; renderButtons(); };
-    symptomBox.appendChild(btn);
-  });
-}
-
-function renderPairs() {
-  const box = document.getElementById("pairsView");
-  if (!pairs.length) {
-    box.textContent = "暂无";
-    return;
-  }
-  box.innerHTML = pairs.map((p, index) => `
-    <div class="pair">
-      <div>
-        <b>${index + 1}. ${p.region.label}</b> → ${p.symptom.label}
-        <div class="hint">severity=${p.severity}, duration=${p.duration}</div>
-      </div>
-      <button class="danger" onclick="removePair(${index})">删除</button>
-    </div>
-  `).join("");
-}
-
-function addPair() {
-  const severity = Number(document.getElementById("severity").value);
-  const duration = document.getElementById("duration").value.trim();
-  pairs.push({
-    region: selectedRegion,
-    symptom: selectedSymptom,
-    severity,
-    duration
-  });
-  renderPairs();
-initParticipantCodeSync();
-loadRecentDiaries();
-}
-
-function removePair(index) {
-  pairs.splice(index, 1);
-  renderPairs();
-}
-
-function clearPairs() {
-  pairs = [];
-  renderPairs();
-}
-
-function uniqueRegionsFromPairs() {
-  const map = new Map();
-  pairs.forEach(p => map.set(p.region.id, { id: p.region.id, label: p.region.label }));
-  return Array.from(map.values());
-}
-
-function symptomsFromPairs() {
-  return pairs.map(p => ({
-    region_id: p.region.id,
-    label: p.symptom.label,
-    severity: p.severity,
-    duration: p.duration
-  }));
-}
-
-function renderAdvice(data) {
-  const box = document.getElementById("adviceView");
-  const card = document.getElementById("adviceCard");
-  const advice = data.advice || {};
-  const links = data.possible_links || [];
-  const safety = data.safety || {};
-  const context = data.emotion_context || {};
-
-  box.innerHTML = `
-    <h3>${advice.title || ""}</h3>
-    <p>${advice.summary || ""}</p>
-    ${advice.state_reading ? `<div style="padding:12px;border-radius:12px;background:#f8fafc;margin:10px 0;line-height:1.7;">${advice.state_reading}</div>` : ""}
-    <div class="hint">
-      情绪：${context.primary_label || "-"} |
-      象限：${context.quadrant || "-"} |
-      建议来源：${advice.source || "-"}
-    </div>
-
-    <h3>身体-情绪线索</h3>
-    <ul>${links.map(x => `<li><b>${x.label || x.type}</b>：${x.description || ""}</li>`).join("")}</ul>
-
-    <h3>可尝试步骤</h3>
-    <ol>${(advice.steps || []).map(x => `<li>${x}</li>`).join("")}</ol>
-
-    <h3>继续记录提示</h3>
-    <p>${advice.reflection_prompt || ""}</p>
-
-    ${safety.risk_level === "high" ? `<h3>风险提示</h3><ul>${(safety.red_flags || []).map(x => `<li>${x}</li>`).join("")}</ul>` : ""}
-  `;
-  card.style.display = "block";
-}
-
-
-function setSubmitState(state, message) {
-  const btn = document.getElementById("submitAdviceBtn");
-  const status = document.getElementById("submitStatus");
-  if (!btn || !status) return;
-
-  btn.classList.remove("loading", "done", "error");
-
-  if (state === "loading") {
-    btn.disabled = true;
-    btn.classList.add("loading");
-    btn.textContent = "生成中，请稍等...";
-    status.textContent = message || "正在调用后端和模型，可能需要几秒。";
-  } else if (state === "done") {
-    btn.disabled = false;
-    btn.classList.add("done");
-    btn.textContent = "生成完成";
-    status.textContent = message || "建议已生成。可以继续调整输入后再次提交。";
-    setTimeout(() => {
-      btn.classList.remove("done");
-      btn.textContent = "生成身体感受建议";
-    }, 1600);
-  } else if (state === "error") {
-    btn.disabled = false;
-    btn.classList.add("error");
-    btn.textContent = "请求失败，可重试";
-    status.textContent = message || "请求失败，请查看 开发调试信息 或后端日志。";
-    setTimeout(() => {
-      btn.classList.remove("error");
-      btn.textContent = "生成身体感受建议";
-    }, 2200);
-  } else {
-    btn.disabled = false;
-    btn.textContent = "生成身体感受建议";
-    status.textContent = message || "系统会综合本次身体感受和最近多条日记。";
-  }
-}
-
-
-async function submitAdvice() {
-  const participantInput = document.getElementById("participantCode");
-  if (participantInput) {
-    rememberParticipantCode(participantInput.value);
-  }
-
-  if (!pairs.length) {
-    addPair();
-  }
-
-  const payload = {
-    participant_code: getEffectiveParticipantCode(),
-    journal_text: document.getElementById("journalText").value.trim(),
-    selected_regions: uniqueRegionsFromPairs(),
-    symptoms: symptomsFromPairs(),
-    free_text: document.getElementById("freeText").value.trim(),
-    include_recent_diaries: true,
-    recent_diary_limit: 5
-  };
-
-  document.getElementById("rawOutput").textContent = "Loading...";
-  document.getElementById("adviceCard").style.display = "none";
-  setSubmitState("loading", "正在生成建议。Qwen 本地模型可能需要几秒。");
-
-  try {
-    const response = await fetch("/body-sensation/advice", {
-      method: "POST",
-      headers: { "Content-Type": "application/json; charset=utf-8" },
-      body: JSON.stringify(payload)
-    });
-    const data = await response.json();
-    document.getElementById("rawOutput").textContent = JSON.stringify(data, null, 2);
-    renderAdvice(data);
-    const source = data && data.advice ? data.advice.source : "-";
-    setSubmitState("done", `建议已生成。来源：${source}`);
-  } catch (error) {
-    document.getElementById("rawOutput").textContent = String(error && error.stack ? error.stack : error);
-    setSubmitState("error", "请求失败。请检查后端是否仍在运行。");
-  }
-}
-
-
-
-const BODY_PARTICIPANT_STORAGE_KEY = "emotype_participant_code";
-
-function normalizeParticipantCode(value) {
-  return String(value || "").trim();
-}
-
-function rememberParticipantCode(code) {
-  code = normalizeParticipantCode(code);
-  if (!code) return;
-  try {
-    localStorage.setItem(BODY_PARTICIPANT_STORAGE_KEY, code);
-    localStorage.setItem("participant_code", code);
-    localStorage.setItem("participantCode", code);
-  } catch (error) {
-    console.warn("failed to persist participant code", error);
-  }
-}
-
-function readParticipantCodeFromUrlOrStorage(defaultCode) {
-  const params = new URLSearchParams(window.location.search);
-  const fromUrl =
-    params.get("participant_code") ||
-    params.get("participantCode") ||
-    params.get("code") ||
-    params.get("participant");
-
-  if (normalizeParticipantCode(fromUrl)) {
-    return normalizeParticipantCode(fromUrl);
-  }
-
-  const keys = [
-    BODY_PARTICIPANT_STORAGE_KEY,
-    "participant_code",
-    "participantCode",
-    "currentParticipantCode",
-    "emomirror_participant_code",
-    "emotype_participant_code"
-  ];
-
-  for (const key of keys) {
-    try {
-      const value = normalizeParticipantCode(localStorage.getItem(key));
-      if (value) return value;
-    } catch (error) {}
-  }
-
-  return normalizeParticipantCode(defaultCode || "P1234");
-}
-
-function initParticipantCodeSync() {
-  const input = document.getElementById("participantCode");
-  if (!input) return;
-
-  const resolvedCode = readParticipantCodeFromUrlOrStorage(input.value);
-  input.value = resolvedCode;
-  rememberParticipantCode(resolvedCode);
-
-  input.addEventListener("input", () => {
-    rememberParticipantCode(input.value);
-  });
-
-  input.addEventListener("change", () => {
-    rememberParticipantCode(input.value);
-    loadRecentDiaries();
-  });
-}
-
-
-let loadedDiaries = [];
-
-function getDiaryText(entry) {
-  if (!entry) return "";
-  return entry.raw_text || entry.transcript_text || entry.text || entry.journal_text || "";
-}
-
-function getDiaryLabel(entry, index) {
-  const time = entry.created_at || entry.updated_at || "";
-  const label = entry.final_label || entry.emotion_label || entry.label || "";
-  const text = getDiaryText(entry);
-  const preview = text.length > 18 ? text.slice(0, 18) + "..." : text;
-  return `${index + 1}. ${label ? "[" + label + "] " : ""}${preview || time || "entry"}`;
-}
-
-
-async function ensureParticipantSession() {
-  const code = getEffectiveParticipantCode();
-  if (!code) return false;
-
-  try {
-    await fetch("/participants/session", {
-      method: "POST",
-      headers: { "Content-Type": "application/json; charset=utf-8" },
-      body: JSON.stringify({
-        participant_code: code,
-        consent_version: "research-v1"
-      })
-    });
-    return true;
-  } catch (error) {
-    console.warn("participant session init failed", error);
-    return false;
-  }
-}
-
-
-
-function getEffectiveParticipantCode() {
-  const input = document.getElementById("participantCode");
-  const params = new URLSearchParams(window.location.search);
-
-  const urlCode =
-    params.get("participant_code") ||
-    params.get("participantCode") ||
-    params.get("code") ||
-    params.get("participant");
-
-  if (urlCode && urlCode.trim()) {
-    const clean = urlCode.trim();
-    if (input && input.value !== clean) {
-      input.value = clean;
-    }
-    try {
-      localStorage.setItem("emotype_participant_code", clean);
-      localStorage.setItem("participant_code", clean);
-      localStorage.setItem("participantCode", clean);
-    } catch (error) {}
-    return clean;
-  }
-
-  if (input && input.value.trim()) {
-    const clean = input.value.trim();
-    try {
-      localStorage.setItem("emotype_participant_code", clean);
-      localStorage.setItem("participant_code", clean);
-      localStorage.setItem("participantCode", clean);
-    } catch (error) {}
-    return clean;
-  }
-
-  try {
-    return (
-      localStorage.getItem("emotype_participant_code") ||
-      localStorage.getItem("participant_code") ||
-      localStorage.getItem("participantCode") ||
-      "P1234"
-    ).trim();
-  } catch (error) {
-    return "P1234";
-  }
-}
-
-function syncParticipantCodeFromUrlNow() {
-  const input = document.getElementById("participantCode");
-  const code = getEffectiveParticipantCode();
-  if (input && code) {
-    input.value = code;
-  }
-  return code;
-}
-
-
-async function loadRecentDiaries() {
-  const code = getEffectiveParticipantCode();
-  const status = document.getElementById("diaryStatus");
-  const tabs = document.getElementById("diaryTabs");
-  const preview = document.getElementById("diaryPreview");
-
-  if (!code) {
-    status.textContent = "请先填写 participant_code";
-    return;
-  }
-
-  await ensureParticipantSession();
-
-  status.textContent = "Loading...";
-  tabs.innerHTML = "";
-  preview.value = "";
-
-  try {
-    const response = await fetch(`/participants/${encodeURIComponent(code)}/diaries`);
-    const data = await response.json();
-
-    if (!response.ok) {
-      loadedDiaries = [];
-      status.textContent = `加载失败：${data.message || data.detail || response.status}`;
-      tabs.innerHTML = '<span class="hint">当前编号还没有可读取的日记。请先在情绪日记页保存几条记录，或确认 participant_code 是否一致。</span>';
-      return;
-    }
-
-    loadedDiaries = Array.isArray(data)
-      ? data
-      : (data.diary_entries || data.diaries || data.entries || data.items || []);
-
-    status.textContent = `已加载 ${loadedDiaries.length} 条`;
-
-    if (!loadedDiaries.length) {
-      tabs.innerHTML = '<span class="hint">没有找到该 participant 的日记</span>';
-      return;
-    }
-
-    loadedDiaries.forEach((entry, index) => {
-      const btn = document.createElement("button");
-      btn.textContent = getDiaryLabel(entry, index);
-      btn.onclick = () => {
-        document.querySelectorAll("#diaryTabs button").forEach(x => x.classList.remove("selected"));
-        btn.classList.add("selected");
-        preview.value = getDiaryText(entry);
-
-        const existing = document.getElementById("useDiaryButtonBox");
-        if (existing) existing.remove();
-
-        const box = document.createElement("div");
-        box.id = "useDiaryButtonBox";
-        box.style.marginTop = "8px";
-        box.className = "hint";
-        box.textContent = "这条日记仅用于回顾。提交时不需要选择原因，后端会综合最近日记。";
-        preview.parentNode.insertBefore(box, preview.nextSibling);
-      };
-      tabs.appendChild(btn);
-    });
-  } catch (error) {
-    status.textContent = "加载失败：" + String(error);
-  }
-}
-
-
-renderButtons();
-renderPairs();
-syncParticipantCodeFromUrlNow();
-</script>
+<script src="/static/body_sensation.js?v=body_v2" defer></script>
 </body>
 </html>
