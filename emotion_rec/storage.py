@@ -609,40 +609,159 @@ def get_review_overview(
         if participant is None:
             return _empty_review_stats(code, start_text, end_text)
 
-        journal_rows = list(session.execute(
-            select(DiaryEntry)
-            .where(DiaryEntry.participant_id == participant.id)
-            .order_by(DiaryEntry.created_at.asc())
+        records = _review_records_for_participant(session, participant, start_text, end_text)
+
+    records.sort(key=lambda item: (str(item.get("date") or ""), str(item.get("time") or ""), str(item.get("source") or "")))
+    return _build_review_stats(code, start_text, end_text, records)
+
+
+def get_review_overview_all(start_date: str, end_date: str) -> dict[str, Any]:
+    start_text, end_text = normalize_review_range(start_date, end_date)
+    with SessionLocal() as session:
+        participants = list(session.execute(
+            select(Participant).order_by(Participant.created_at.asc())
         ).scalars())
-        formal_rows = list(session.execute(
-            select(FormalDiary)
-            .where(FormalDiary.participant_id == participant.id)
-            .order_by(FormalDiary.diary_date.asc(), FormalDiary.created_at.asc())
-        ).scalars())
-        events = list(session.execute(
-            select(UsageEvent)
-            .where(UsageEvent.participant_id == participant.id)
-            .order_by(UsageEvent.created_at.asc())
-        ).scalars())
+        records: list[dict[str, Any]] = []
+        for participant in participants:
+            records.extend(_review_records_for_participant(session, participant, start_text, end_text))
+
+    records.sort(key=lambda item: (str(item.get("date") or ""), str(item.get("time") or ""), str(item.get("participant_code") or "")))
+    stats = _build_review_stats("all", start_text, end_text, records)
+    stats["participant_count"] = len({record.get("participant_code") for record in records if record.get("participant_code")})
+    return stats
+
+
+def list_records(
+    participant_code: str,
+    start_date: str,
+    end_date: str,
+    source: str = "all",
+) -> dict[str, Any]:
+    code = normalize_participant_code(participant_code or "local")
+    start_text, end_text = normalize_review_range(start_date, end_date)
+    with SessionLocal() as session:
+        participant = _participant_by_code(session, code)
+        records = [] if participant is None else _review_records_for_participant(session, participant, start_text, end_text)
+    records = _filter_review_records_by_source(records, source)
+    records.sort(key=_record_sort_key_desc, reverse=True)
+    return {
+        "participant_code": code,
+        "start_date": start_text,
+        "end_date": end_text,
+        "source": _normalize_record_source_filter(source),
+        "total": len(records),
+        "source_counts": dict(Counter(record.get("source") or "unknown" for record in records)),
+        "records": records,
+    }
+
+
+def list_records_all(
+    start_date: str,
+    end_date: str,
+    source: str = "all",
+    participant_code: str = "all",
+) -> dict[str, Any]:
+    start_text, end_text = normalize_review_range(start_date, end_date)
+    target = str(participant_code or "all").strip() or "all"
+    with SessionLocal() as session:
+        if target.lower() == "all":
+            participants = list(session.execute(
+                select(Participant).order_by(Participant.created_at.asc())
+            ).scalars())
+        else:
+            participant = _participant_by_code(session, target)
+            participants = [participant] if participant is not None else []
+
+        records: list[dict[str, Any]] = []
+        for participant in participants:
+            records.extend(_review_records_for_participant(session, participant, start_text, end_text))
+
+    records = _filter_review_records_by_source(records, source)
+    records.sort(key=_record_sort_key_desc, reverse=True)
+    return {
+        "participant_code": target,
+        "start_date": start_text,
+        "end_date": end_text,
+        "source": _normalize_record_source_filter(source),
+        "participant_count": len({record.get("participant_code") for record in records if record.get("participant_code")}),
+        "total": len(records),
+        "source_counts": dict(Counter(record.get("source") or "unknown" for record in records)),
+        "records": records,
+    }
+
+
+def _review_records_for_participant(
+    session: Session,
+    participant: Participant,
+    start_date: str,
+    end_date: str,
+) -> list[dict[str, Any]]:
+    journal_rows = list(session.execute(
+        select(DiaryEntry)
+        .where(DiaryEntry.participant_id == participant.id)
+        .order_by(DiaryEntry.created_at.asc())
+    ).scalars())
+    formal_rows = list(session.execute(
+        select(FormalDiary)
+        .where(FormalDiary.participant_id == participant.id)
+        .order_by(FormalDiary.diary_date.asc(), FormalDiary.created_at.asc())
+    ).scalars())
+    events = list(session.execute(
+        select(UsageEvent)
+        .where(UsageEvent.participant_id == participant.id)
+        .order_by(UsageEvent.created_at.asc())
+    ).scalars())
 
     records: list[dict[str, Any]] = []
     for entry in journal_rows:
         record = _journal_review_record(entry)
-        if _review_record_in_range(record, start_text, end_text):
+        record["participant_code"] = participant.participant_code
+        if _review_record_in_range(record, start_date, end_date):
             records.append(record)
 
     for diary in formal_rows:
         record = _formal_diary_review_record(diary)
-        if _review_record_in_range(record, start_text, end_text):
+        record["participant_code"] = participant.participant_code
+        if _review_record_in_range(record, start_date, end_date):
             records.append(record)
 
     for event in events:
         record = _usage_event_review_record(event)
-        if record and _review_record_in_range(record, start_text, end_text):
+        if record:
+            record["participant_code"] = participant.participant_code
+        if record and _review_record_in_range(record, start_date, end_date):
             records.append(record)
 
-    records.sort(key=lambda item: (str(item.get("date") or ""), str(item.get("time") or ""), str(item.get("source") or "")))
-    return _build_review_stats(code, start_text, end_text, records)
+    return records
+
+
+def _normalize_record_source_filter(source: str) -> str:
+    value = str(source or "all").strip().lower()
+    aliases = {
+        "all": "all",
+        "journal": "journal",
+        "diary": "diary",
+        "formal_diary": "diary",
+        "formal": "diary",
+        "body": "body_sensation",
+        "body_sensation": "body_sensation",
+    }
+    return aliases.get(value, "all")
+
+
+def _filter_review_records_by_source(records: list[dict[str, Any]], source: str) -> list[dict[str, Any]]:
+    normalized = _normalize_record_source_filter(source)
+    if normalized == "all":
+        return list(records)
+    return [record for record in records if record.get("source") == normalized]
+
+
+def _record_sort_key_desc(record: dict[str, Any]):
+    return (
+        str(record.get("time") or record.get("date") or ""),
+        str(record.get("source") or ""),
+        int(record.get("id") or 0),
+    )
 
 
 def get_emotion_review_report(
@@ -754,6 +873,10 @@ def _empty_review_stats(participant_code: str, start_date: str, end_date: str) -
         "colors": [],
         "primary_emotions": [],
         "fine_emotions": [],
+        "per_day_distribution": {
+            day: {"date": day, "count": 0, "source_counts": {}, "items": [], "records": []}
+            for day in _review_date_list(start_date, end_date)
+        },
         "triggers": [],
         "body_signals": [],
         "records": [],
@@ -873,6 +996,10 @@ def _build_review_stats(
         "colors": _review_color_items(color_counts),
         "primary_emotions": _review_counter_items(primary_counter, 12),
         "fine_emotions": _review_counter_items(fine_counter, 16),
+        "per_day_distribution": {
+            day: _review_day_distribution(day, day_records.get(day, []))
+            for day in _review_date_list(start_date, end_date)
+        },
         "triggers": _review_detail_items(trigger_counter, trigger_details, 12),
         "body_signals": _review_detail_items(body_counter, body_details, 12),
         "records": records[-160:],
@@ -919,6 +1046,7 @@ def _journal_review_record(entry: DiaryEntry) -> dict[str, Any]:
         "date": _review_date_from_iso(created_at),
         "time": created_at,
         "summary": _review_preview(text_value, 160, "随手记记录"),
+        "content": text_value,
         "valence": optional_float(valence),
         "arousal": optional_float(arousal),
         "primary_emotion": str(primary or "中性"),
@@ -927,6 +1055,11 @@ def _journal_review_record(entry: DiaryEntry) -> dict[str, Any]:
         "emotion_color_name": None,
         "triggers": _dedupe_texts(triggers, 8),
         "body_signals": _dedupe_texts(_review_body_terms(text_value), 8),
+        "detail": {
+            "content": text_value,
+            "candidates": safe_json(entry.candidates_json or []),
+            "text_emotion": safe_json(text_emotion),
+        },
     }
 
 
@@ -959,6 +1092,8 @@ def _formal_diary_review_record(diary: FormalDiary) -> dict[str, Any]:
         "date": diary.diary_date,
         "time": isoformat(diary.updated_at or diary.created_at),
         "summary": _review_preview("｜".join([part for part in (title, content) if part]), 180, "正式日记记录"),
+        "title": title,
+        "content": content,
         "valence": optional_float(diary.valence if diary.valence is not None else reflection.get("valence")),
         "arousal": optional_float(diary.arousal if diary.arousal is not None else reflection.get("arousal")),
         "primary_emotion": diary.primary_emotion or reflection.get("primary_emotion") or "中性",
@@ -967,6 +1102,26 @@ def _formal_diary_review_record(diary: FormalDiary) -> dict[str, Any]:
         "emotion_color_name": diary.emotion_color_name or reflection.get("emotion_color_name"),
         "triggers": _dedupe_texts(triggers, 8),
         "body_signals": _dedupe_texts(body, 10),
+        "reflection_summary": (
+            reflection.get("event_summary")
+            or reflection.get("gentle_reflection")
+            or reflection.get("possible_trigger")
+            or ""
+        ),
+        "detail": {
+            "title": title,
+            "content": content,
+            "diary_date": diary.diary_date,
+            "physical_weather": diary.physical_weather,
+            "mood_weather": diary.mood_weather,
+            "reflection_summary": (
+                reflection.get("event_summary")
+                or reflection.get("gentle_reflection")
+                or reflection.get("possible_trigger")
+                or ""
+            ),
+            "reflection": safe_json(reflection),
+        },
     }
 
 
@@ -981,6 +1136,7 @@ def _usage_event_review_record(event: UsageEvent) -> dict[str, Any] | None:
         region_labels = _labels_from_body_items(regions)
         parts = [item for item in ("、".join(region_labels), "、".join(symptom_labels)) if item]
         summary = "身体感受：" + ("；".join(parts) if parts else "已生成身体感受建议")
+        body_signals = _dedupe_texts(symptom_labels + region_labels + _review_body_terms(summary), 12)
         return {
             "source": "body_sensation",
             "source_label": "身体感受",
@@ -995,7 +1151,15 @@ def _usage_event_review_record(event: UsageEvent) -> dict[str, Any] | None:
             "emotion_color": metadata.get("color"),
             "emotion_color_name": None,
             "triggers": _dedupe_texts(_review_trigger_terms(summary), 8),
-            "body_signals": _dedupe_texts(symptom_labels + region_labels + _review_body_terms(summary), 12),
+            "body_regions": region_labels,
+            "body_signals": body_signals,
+            "content": summary,
+            "detail": {
+                "selected_regions": safe_json(regions),
+                "symptoms": safe_json(symptoms),
+                "risk_level": metadata.get("risk_level"),
+                "summary": summary,
+            },
         }
 
     if event_type == "custom_label_applied":
@@ -1223,6 +1387,64 @@ def _review_color_items(color_counts: dict[str, dict[str, Any]]) -> list[dict[st
             "labels": [label for label, _count in labels.most_common(4)],
         })
     return items[:16]
+
+
+def _review_day_distribution(day: str, records: list[dict[str, Any]]) -> dict[str, Any]:
+    label_counts: Counter[str] = Counter()
+    label_sources: dict[str, Counter[str]] = defaultdict(Counter)
+    label_colors: dict[str, Counter[str]] = defaultdict(Counter)
+
+    for record in records:
+        source = str(record.get("source") or "unknown")
+        color = _normalize_hex_color(record.get("emotion_color")) or _color_for_source(source)
+        labels = []
+        primary = str(record.get("primary_emotion") or "").strip()
+        if primary:
+            labels.append(primary)
+        labels.extend(_review_text_list(record.get("fine_emotions"))[:4])
+
+        for label in _dedupe_texts(labels, 8):
+            label_counts[label] += 1
+            label_sources[label][source] += 1
+            label_colors[label][color] += 1
+
+    items = []
+    for label, count in label_counts.most_common(12):
+        color_counts = label_colors.get(label) or Counter()
+        items.append({
+            "label": label,
+            "count": count,
+            "emotion_color": color_counts.most_common(1)[0][0] if color_counts else "#94A3B8",
+            "sources": dict(label_sources.get(label) or {}),
+        })
+
+    return {
+        "date": day,
+        "count": len(records),
+        "source_counts": dict(Counter(str(record.get("source") or "unknown") for record in records)),
+        "items": items,
+        "records": [
+            {
+                "source": record.get("source"),
+                "source_label": record.get("source_label"),
+                "id": record.get("id"),
+                "time": record.get("time"),
+                "summary": record.get("summary"),
+                "primary_emotion": record.get("primary_emotion"),
+                "emotion_color": _normalize_hex_color(record.get("emotion_color")),
+            }
+            for record in records[-20:]
+        ],
+    }
+
+
+def _color_for_source(source: str) -> str:
+    return {
+        "journal": "#D97706",
+        "diary": "#2563EB",
+        "body_sensation": "#10B981",
+        "realtime_emotion": "#8B5CF6",
+    }.get(source, "#94A3B8")
 
 
 def export_participant_data(participant_code: str) -> dict[str, Any]:

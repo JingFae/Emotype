@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>情绪复盘 | EmoBridge</title>
   <link rel="stylesheet" href="/static/styles.css?v=20260604" />
-  <link rel="stylesheet" href="/static/review.css?v=20260604" />
+  <link rel="stylesheet" href="/static/review.css?v=20260605" />
 </head>
 <body class="review-page">
 <main class="app-shell review-shell">
@@ -20,6 +20,7 @@
       <a class="tab-button" href="/#journalView">随手记</a>
       <a class="tab-button" href="/diary">日记本</a>
       <a class="tab-button is-active" href="/review" aria-current="page">情绪复盘</a>
+      <a class="tab-button" href="/records">历史记录</a>
       <a class="tab-button" href="/body-sensation">身体感受</a>
     </nav>
 
@@ -87,6 +88,26 @@
         </div>
       </article>
 
+      <article class="review-panel day-distribution-panel" aria-labelledby="dayDistributionTitle">
+        <div class="review-panel-head">
+          <div>
+            <p class="eyebrow">Daily Mix</p>
+            <h2 id="dayDistributionTitle">某一天情绪分布</h2>
+          </div>
+          <label class="review-day-select" for="reviewDaySelect">
+            <span>选择日期</span>
+            <select id="reviewDaySelect"></select>
+          </label>
+        </div>
+        <div class="review-donut-grid">
+          <div class="review-donut" id="reviewDonut" aria-label="每日情绪分布环形图">
+            <span id="reviewDonutCenter">0</span>
+          </div>
+          <div class="review-donut-legend" id="reviewDonutLegend"></div>
+        </div>
+        <p class="review-empty-line" id="reviewDonutEmpty">这一天记录还不多，暂时看不出明显分布。</p>
+      </article>
+
       <article class="review-panel" aria-labelledby="paletteTitle">
         <div class="review-panel-head">
           <div>
@@ -141,6 +162,16 @@
         <div class="review-list detailed" id="reviewBodySignals"></div>
       </article>
 
+      <article class="review-panel" aria-labelledby="sourceDetailTitle">
+        <div class="review-panel-head compact">
+          <div>
+            <p class="eyebrow">Sources</p>
+            <h2 id="sourceDetailTitle">记录来源明细</h2>
+          </div>
+        </div>
+        <div class="review-source-list" id="reviewSourceDetails"></div>
+      </article>
+
       <article class="review-panel ai-review-panel" aria-labelledby="aiReviewTitle">
         <div class="review-panel-head">
           <div>
@@ -174,6 +205,6 @@
     </aside>
   </section>
 </main>
-<script src="/static/review.js?v=20260604" defer></script>
+<script src="/static/review.js?v=20260605" defer></script>
 </body>
 </html>

@@ -13,11 +13,17 @@ const els = {
   bodyCount: document.getElementById("reviewBodyCount"),
   canvas: document.getElementById("reviewTrendCanvas"),
   trendEmpty: document.getElementById("trendEmpty"),
+  daySelect: document.getElementById("reviewDaySelect"),
+  donut: document.getElementById("reviewDonut"),
+  donutCenter: document.getElementById("reviewDonutCenter"),
+  donutLegend: document.getElementById("reviewDonutLegend"),
+  donutEmpty: document.getElementById("reviewDonutEmpty"),
   palette: document.getElementById("reviewColorPalette"),
   primaryEmotions: document.getElementById("reviewPrimaryEmotions"),
   fineEmotions: document.getElementById("reviewFineEmotions"),
   triggers: document.getElementById("reviewTriggers"),
   bodySignals: document.getElementById("reviewBodySignals"),
+  sourceDetails: document.getElementById("reviewSourceDetails"),
   aiSummary: document.getElementById("aiPeriodSummary"),
   aiPattern: document.getElementById("aiPattern"),
   aiTriggers: document.getElementById("aiTriggers"),
@@ -30,6 +36,8 @@ const els = {
 const state = {
   stats: null,
   report: null,
+  selectedDay: "",
+  trendHits: [],
   resizeTimer: null,
 };
 
@@ -272,13 +280,116 @@ function renderReport(reportLike) {
 
 function renderStats(stats) {
   state.stats = stats || null;
+  if (!state.selectedDay || !stats?.per_day_distribution?.[state.selectedDay]) {
+    const days = stats?.days || [];
+    const latestWithData = days.slice().reverse().find((day) => Number(day.count) > 0);
+    state.selectedDay = latestWithData?.date || days[days.length - 1]?.date || els.endDate.value;
+  }
   renderSummary(stats || {});
+  renderDayOptions(stats || {});
+  renderDayDistribution();
+  renderSourceDetails(stats || {});
   renderPalette(stats?.colors || []);
   renderRankedList(els.primaryEmotions, stats?.primary_emotions || []);
   renderFineEmotions(stats?.fine_emotions || []);
   renderDetailedList(els.triggers, stats?.triggers || [], "这段时间还没有明显触发因素。");
   renderDetailedList(els.bodySignals, stats?.body_signals || [], "这段时间还没有明显身体信号。");
   drawTrend();
+}
+
+function renderDayOptions(stats) {
+  clearNode(els.daySelect);
+  (stats.days || []).forEach((day) => {
+    const option = document.createElement("option");
+    option.value = day.date;
+    option.textContent = `${day.date}${day.count ? ` · ${day.count} 条` : ""}`;
+    els.daySelect.appendChild(option);
+  });
+  els.daySelect.value = state.selectedDay || "";
+}
+
+function renderDayDistribution() {
+  const distribution = state.stats?.per_day_distribution?.[state.selectedDay] || null;
+  const items = distribution?.items || [];
+  const total = items.reduce((sum, item) => sum + (Number(item.count) || 0), 0);
+  els.donutCenter.textContent = String(distribution?.count || 0);
+  els.donutLegend.textContent = "";
+
+  if (!items.length || total <= 0) {
+    els.donut.style.background = "conic-gradient(#E7E5E4 0deg 360deg)";
+    els.donutEmpty.style.display = "block";
+    return;
+  }
+
+  els.donutEmpty.style.display = "none";
+  let cursor = 0;
+  const stops = items.map((item) => {
+    const start = cursor;
+    const end = cursor + ((Number(item.count) || 0) / total) * 360;
+    cursor = end;
+    return `${item.emotion_color || "#94A3B8"} ${start.toFixed(2)}deg ${end.toFixed(2)}deg`;
+  });
+  els.donut.style.background = `conic-gradient(${stops.join(", ")})`;
+
+  items.forEach((item) => {
+    const row = document.createElement("article");
+    row.className = "review-donut-row";
+    const color = document.createElement("span");
+    color.style.background = item.emotion_color || "#94A3B8";
+    const body = document.createElement("div");
+    const title = document.createElement("strong");
+    title.textContent = item.label || "未命名";
+    const sources = Object.entries(item.sources || {})
+      .filter(([, value]) => value)
+      .map(([source, count]) => `${sourceLabel(source)} ${count}`)
+      .join(" · ");
+    const meta = document.createElement("small");
+    meta.textContent = `${item.count || 0} 次${sources ? ` · ${sources}` : ""}`;
+    body.append(title, meta);
+    row.append(color, body);
+    els.donutLegend.appendChild(row);
+  });
+}
+
+function renderSourceDetails(stats) {
+  clearNode(els.sourceDetails);
+  const records = stats.records || [];
+  const groups = [
+    { key: "journal", label: "Journal 随手记" },
+    { key: "diary", label: "Diary 正式日记" },
+    { key: "body_sensation", label: "Body 身体感受" },
+  ];
+
+  groups.forEach((group) => {
+    const rows = records.filter((record) => record.source === group.key).slice(-6).reverse();
+    const details = document.createElement("details");
+    details.className = "review-source-group";
+    if (rows.length) details.open = group.key === "journal";
+    const summary = document.createElement("summary");
+    summary.textContent = `${group.label} · ${rows.length}`;
+    details.appendChild(summary);
+
+    if (!rows.length) {
+      const empty = document.createElement("p");
+      empty.textContent = "这段时间暂无该来源记录。";
+      details.appendChild(empty);
+    } else {
+      rows.forEach((record) => {
+        const link = document.createElement("a");
+        link.href = `/records?start_date=${encodeURIComponent(els.startDate.value)}&end_date=${encodeURIComponent(els.endDate.value)}&source=${encodeURIComponent(group.key)}`;
+        link.className = "review-source-record";
+        const title = document.createElement("strong");
+        title.textContent = record.primary_emotion || sourceLabel(record.source);
+        const meta = document.createElement("span");
+        meta.textContent = `${record.date || ""} · V ${formatSigned(record.valence)} · A ${formatSigned(record.arousal)}`;
+        const text = document.createElement("p");
+        text.textContent = record.summary || "记录摘要";
+        link.append(title, meta, text);
+        details.appendChild(link);
+      });
+    }
+    els.sourceDetails.appendChild(details);
+  });
 }
 
 function pointValue(point, key) {
@@ -309,6 +420,7 @@ function drawLine(ctx, points, key, color, chart) {
 function drawTrend() {
   const canvas = els.canvas;
   const points = state.stats?.trend_points || [];
+  state.trendHits = [];
   els.trendEmpty.style.display = points.length ? "none" : "grid";
   const rect = canvas.getBoundingClientRect();
   const width = Math.max(320, rect.width || canvas.parentElement.clientWidth || 640);
@@ -359,6 +471,7 @@ function drawTrend() {
     if (value === null) return;
     const x = chart.left + (index / Math.max(points.length - 1, 1)) * chart.width;
     const y = chart.top + ((1 - value) / 2) * chart.height;
+    state.trendHits.push({ x, y, date: point.date });
     ctx.beginPath();
     ctx.fillStyle = point.emotion_color || "#94A3B8";
     ctx.arc(x, y, 4.5, 0, Math.PI * 2);
@@ -426,6 +539,23 @@ async function reflectReview() {
 function bindEvents() {
   els.loadBtn.addEventListener("click", loadOverview);
   els.reflectBtn.addEventListener("click", reflectReview);
+  els.daySelect.addEventListener("change", () => {
+    state.selectedDay = els.daySelect.value;
+    renderDayDistribution();
+  });
+  els.canvas.addEventListener("click", (event) => {
+    const rect = els.canvas.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    const hit = state.trendHits
+      .map((item) => ({ ...item, distance: Math.hypot(item.x - x, item.y - y) }))
+      .filter((item) => item.date && item.distance <= 16)
+      .sort((left, right) => left.distance - right.distance)[0];
+    if (!hit) return;
+    state.selectedDay = hit.date;
+    els.daySelect.value = hit.date;
+    renderDayDistribution();
+  });
   [els.startDate, els.endDate].forEach((input) => {
     input.addEventListener("change", () => {
       setReportState("待读取");

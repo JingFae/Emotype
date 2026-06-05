@@ -48,7 +48,10 @@ try:
         get_formal_diary_by_date,
         get_or_create_participant,
         get_review_overview,
+        get_review_overview_all,
         init_database,
+        list_records,
+        list_records_all,
         list_diary_context,
         list_diary_entries,
         log_usage_event,
@@ -79,7 +82,10 @@ except ModuleNotFoundError:
         get_formal_diary_by_date,
         get_or_create_participant,
         get_review_overview,
+        get_review_overview_all,
         init_database,
+        list_records,
+        list_records_all,
         list_diary_context,
         list_diary_entries,
         log_usage_event,
@@ -187,6 +193,18 @@ async def review_page():
 
 @app.head("/review", include_in_schema=False)
 async def review_page_head():
+    return Response(status_code=200, media_type="text/html")
+
+
+@app.get("/records", include_in_schema=False)
+@app.get("/history", include_in_schema=False)
+async def records_page():
+    return FileResponse(STATIC_DIR / "records.html")
+
+
+@app.head("/records", include_in_schema=False)
+@app.head("/history", include_in_schema=False)
+async def records_page_head():
     return Response(status_code=200, media_type="text/html")
 
 # -----------------------------
@@ -1345,6 +1363,16 @@ def _check_admin_token(admin_token: str | None, x_admin_token: str | None):
         raise HTTPException(status_code=403, detail="Invalid admin token.")
 
 
+def _check_api_admin_token(admin_token: str | None, x_admin_token: str | None):
+    token = admin_token or x_admin_token
+    if not ADMIN_TOKEN:
+        raise HTTPException(status_code=401, detail="ADMIN_TOKEN is not configured.")
+    if not token:
+        raise HTTPException(status_code=401, detail="Admin token is required.")
+    if token != ADMIN_TOKEN:
+        raise HTTPException(status_code=403, detail="Invalid admin token.")
+
+
 @app.post("/participants/session")
 async def participant_session(payload: ParticipantSessionRequest):
     try:
@@ -1602,6 +1630,75 @@ async def review_reflect(payload: ReviewReflectRequest):
             "report_json": report_json,
             "llm_used": isinstance(llm_report, dict),
         }
+    except Exception as error:
+        raise _storage_error(error)
+
+
+@app.get("/api/records")
+async def records_api(
+    participant_code: str | None = Query(default=None),
+    start_date: str | None = Query(default=None, description="Start date in YYYY-MM-DD"),
+    end_date: str | None = Query(default=None, description="End date in YYYY-MM-DD"),
+    source: str = Query(default="all"),
+):
+    try:
+        default_start, default_end = _review_default_dates()
+        start_text, end_text = normalize_review_range(start_date or default_start, end_date or default_end)
+        code = _review_participant_code(participant_code)
+        result = list_records(code, start_text, end_text, source)
+        return {"status": "success", **result}
+    except Exception as error:
+        raise _storage_error(error)
+
+
+@app.get("/api/admin/review/overview")
+async def admin_review_overview(
+    start_date: str | None = Query(default=None, description="Start date in YYYY-MM-DD"),
+    end_date: str | None = Query(default=None, description="End date in YYYY-MM-DD"),
+    participant_code: str = Query(default="all"),
+    admin_token: str | None = Query(default=None),
+    x_admin_token: str | None = Header(default=None),
+):
+    try:
+        _check_api_admin_token(admin_token, x_admin_token)
+        default_start, default_end = _review_default_dates()
+        start_text, end_text = normalize_review_range(start_date or default_start, end_date or default_end)
+        if str(participant_code or "all").strip().lower() == "all":
+            stats = get_review_overview_all(start_text, end_text)
+        else:
+            code = _review_participant_code(participant_code)
+            stats = get_review_overview(code, start_text, end_text)
+        return {
+            "status": "success",
+            "participant_code": participant_code,
+            "start_date": start_text,
+            "end_date": end_text,
+            "period_type": review_period_type(start_text, end_text),
+            "stats": stats,
+        }
+    except HTTPException:
+        raise
+    except Exception as error:
+        raise _storage_error(error)
+
+
+@app.get("/api/admin/records")
+async def admin_records_api(
+    start_date: str | None = Query(default=None, description="Start date in YYYY-MM-DD"),
+    end_date: str | None = Query(default=None, description="End date in YYYY-MM-DD"),
+    participant_code: str = Query(default="all"),
+    source: str = Query(default="all"),
+    admin_token: str | None = Query(default=None),
+    x_admin_token: str | None = Header(default=None),
+):
+    try:
+        _check_api_admin_token(admin_token, x_admin_token)
+        default_start, default_end = _review_default_dates()
+        start_text, end_text = normalize_review_range(start_date or default_start, end_date or default_end)
+        result = list_records_all(start_text, end_text, source, participant_code)
+        return {"status": "success", **result}
+    except HTTPException:
+        raise
     except Exception as error:
         raise _storage_error(error)
 
