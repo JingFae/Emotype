@@ -1251,7 +1251,7 @@ async function boot() {
 const I18N = {
   zh: {
     "brand.tag": "情绪镜像日记",
-    "nav.home": "首页", "nav.journal": "随手记", "nav.diaryBook": "日记本", "nav.body": "身体感受", "nav.data": "数据",
+    "nav.home": "首页", "nav.journal": "随手记", "nav.diaryBook": "日记本", "nav.review": "情绪复盘", "nav.body": "身体感受", "nav.data": "数据",
     "topbar.local": "本地模式",
     "research.title": "研究模式", "research.code": "实验编号", "research.consent": "同意保存日记和操作日志用于研究分析",
     "research.connect": "进入记录", "research.exportJson": "导出 JSON", "research.exportCsv": "导出 CSV",
@@ -1290,7 +1290,7 @@ const I18N = {
   },
   en: {
     "brand.tag": "Emotion Mirror Journal",
-    "nav.home": "Home", "nav.journal": "Journal", "nav.diaryBook": "Diary", "nav.body": "Body Sense", "nav.data": "Data",
+    "nav.home": "Home", "nav.journal": "Journal", "nav.diaryBook": "Diary", "nav.review": "Review", "nav.body": "Body Sense", "nav.data": "Data",
     "topbar.local": "Local mode",
     "research.title": "Research mode", "research.code": "Participant ID", "research.consent": "I agree to save journals and logs for research",
     "research.connect": "Connect", "research.exportJson": "Export JSON", "research.exportCsv": "Export CSV",

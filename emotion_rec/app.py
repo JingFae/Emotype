@@ -2,6 +2,7 @@ import io
 import os
 import json
 import tempfile
+from datetime import date as date_cls, timedelta
 from pathlib import Path
 import numpy as np
 import torch
@@ -43,14 +44,19 @@ try:
         export_all_data,
         export_participant_csv,
         export_participant_data,
+        get_emotion_review_report,
         get_formal_diary_by_date,
         get_or_create_participant,
+        get_review_overview,
         init_database,
         list_diary_context,
         list_diary_entries,
         log_usage_event,
         normalize_diary_date,
+        normalize_review_range,
+        review_period_type,
         update_formal_diary_reflection,
+        upsert_emotion_review_report,
         upsert_formal_diary_by_date,
     )
 except ModuleNotFoundError:
@@ -69,14 +75,19 @@ except ModuleNotFoundError:
         export_all_data,
         export_participant_csv,
         export_participant_data,
+        get_emotion_review_report,
         get_formal_diary_by_date,
         get_or_create_participant,
+        get_review_overview,
         init_database,
         list_diary_context,
         list_diary_entries,
         log_usage_event,
         normalize_diary_date,
+        normalize_review_range,
+        review_period_type,
         update_formal_diary_reflection,
+        upsert_emotion_review_report,
         upsert_formal_diary_by_date,
     )
 
@@ -158,6 +169,11 @@ async def index():
 async def diary_page():
     return FileResponse(STATIC_DIR / "diary.html")
 
+
+@app.get("/review", include_in_schema=False)
+async def review_page():
+    return FileResponse(STATIC_DIR / "review.html")
+
 # -----------------------------
 # Globals
 # -----------------------------
@@ -219,6 +235,12 @@ class FormalDiaryUpsertRequest(BaseModel):
 
 class DiaryReflectRequest(BaseModel):
     participant_code: str | None = Field(default=None, min_length=2, max_length=64)
+
+
+class ReviewReflectRequest(BaseModel):
+    participant_code: str | None = Field(default=None, min_length=2, max_length=64)
+    start_date: str = Field(..., max_length=10)
+    end_date: str = Field(..., max_length=10)
 
 
 @app.on_event("startup")
@@ -624,6 +646,213 @@ event_summary, gentle_reflection, primary_emotion, secondary_emotions, fine_grai
         return parsed if isinstance(parsed, dict) else None
     except Exception as error:
         print(f"[diary] reflection LLM skipped: {error}")
+        return None
+
+
+REVIEW_ANALYSIS_VERSION = "emotion-review-v1"
+
+
+def _review_default_dates() -> tuple[str, str]:
+    end = date_cls.today()
+    start = end - timedelta(days=6)
+    return start.isoformat(), end.isoformat()
+
+
+def _review_participant_code(participant_code: str | None) -> str:
+    return _diary_participant_code(participant_code)
+
+
+def _review_soften_text(text: str) -> str:
+    softened = str(text or "")
+    replacements = {
+        "你就是焦虑": "你可能正在经历一些不安和紧绷",
+        "你就是抑郁": "这段时间看起来可能有些低落",
+        "你很焦虑": "你可能有些不安",
+        "你很抑郁": "你可能有些低落",
+        "你有焦虑症": "你可能有一些持续的不安感",
+        "你有抑郁症": "你可能有一些持续的低落感",
+        "焦虑症": "不安感",
+        "抑郁症": "持续低落感",
+    }
+    for source, target in replacements.items():
+        softened = softened.replace(source, target)
+    return softened.strip()
+
+
+def _review_soften_json(value):
+    if isinstance(value, dict):
+        return {key: _review_soften_json(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_review_soften_json(item) for item in value]
+    if isinstance(value, str):
+        return _review_soften_text(value)
+    return value
+
+
+def _review_named_notes(value, fallback_labels: list[dict] | None = None, limit: int = 6) -> list[dict]:
+    notes = []
+    if isinstance(value, list):
+        for item in value:
+            if isinstance(item, dict):
+                label = str(item.get("label") or item.get("emotion") or item.get("name") or "").strip()
+                note = str(item.get("note") or item.get("summary") or item.get("description") or "").strip()
+            else:
+                label = str(item or "").strip()
+                note = ""
+            if label:
+                notes.append({"label": label, "note": _review_soften_text(note)})
+            if len(notes) >= limit:
+                break
+    if notes:
+        return notes
+    return (fallback_labels or [])[:limit]
+
+
+def _fallback_review_reflection(stats: dict) -> dict:
+    total = int(stats.get("total_records") or 0)
+    top_primary = (stats.get("primary_emotions") or [])[:3]
+    top_fine = (stats.get("fine_emotions") or [])[:5]
+    top_triggers = (stats.get("triggers") or [])[:5]
+    top_body = (stats.get("body_signals") or [])[:5]
+    top_colors = (stats.get("colors") or [])[:4]
+    primary_text = "、".join(item.get("label", "") for item in top_primary if item.get("label")) or "尚不明显的情绪"
+    trigger_text = "、".join(item.get("label", "") for item in top_triggers if item.get("label")) or "日常事件和身体状态"
+    body_text = "、".join(item.get("label", "") for item in top_body if item.get("label")) or "暂时不明显"
+
+    return {
+        "period_summary": (
+            f"{stats.get('start_date')} 到 {stats.get('end_date')} 之间共整理到 {total} 条记录。"
+            f"看起来，这段时间较常出现的情绪线索包括“{primary_text}”。"
+        ),
+        "emotional_pattern": (
+            "这些结果更像是一组阶段性线索，而不是定论。"
+            "你可以先观察哪些情绪反复出现、哪些日子能量更高或更低。"
+        ),
+        "color_story": (
+            "颜色色板显示了这段时间情绪落点的分布。"
+            + (f"较常出现的颜色有 {len(top_colors)} 种，可以把它们当作情绪天气的提示。" if top_colors else "目前颜色样本还不多。")
+        ),
+        "main_emotions": [
+            {
+                "label": item.get("label"),
+                "note": f"出现 {item.get('count')} 次，可能是这段时间较容易被记录下来的感受。",
+            }
+            for item in top_primary
+        ],
+        "fine_grained_emotions": [item.get("label") for item in top_fine if item.get("label")],
+        "possible_triggers": [
+            f"{item.get('label')}：可能和这段时间反复出现的事件或背景有关。"
+            for item in top_triggers
+        ] or [f"可能和{trigger_text}有关，但还需要结合你自己的感受确认。"],
+        "body_signal_summary": f"身体信号里较常被看见的是：{body_text}。这些只是身体线索，不等同于医学判断。",
+        "gentle_observations": [
+            "看起来，把随手记、正式日记和身体感受放在一起后，情绪变化会比单条记录更容易被看见。",
+            "也许可以留意：哪些事件之后 V-A 坐标更容易偏向高能量，哪些时段更容易变低。",
+        ],
+        "reflection_questions": [
+            "这段时间哪一天的情绪转折最明显？",
+            "有没有一种感受，其实是通过身体信号先出现的？",
+            "如果只照顾一个最常出现的需求，它可能是什么？",
+        ],
+        "small_steps": [
+            "选一条最有代表性的记录，补一句当时真正需要什么。",
+            "给高能量或低能量的日子各标一个关键词，看看它们是否有共同背景。",
+        ],
+        "non_diagnostic_note": "这份复盘只是帮助整理线索，不用于诊断，也不能替代专业支持。",
+    }
+
+
+def _normalize_review_reflection(raw: dict | None, stats: dict) -> dict:
+    fallback = _fallback_review_reflection(stats)
+    raw = _review_soften_json(raw if isinstance(raw, dict) else {})
+    result = dict(fallback)
+
+    for key in (
+        "period_summary",
+        "emotional_pattern",
+        "color_story",
+        "body_signal_summary",
+        "non_diagnostic_note",
+    ):
+        value = raw.get(key)
+        if isinstance(value, str) and value.strip():
+            result[key] = _review_soften_text(value)
+
+    result["main_emotions"] = _review_named_notes(raw.get("main_emotions"), fallback["main_emotions"], 6)
+
+    for key in (
+        "fine_grained_emotions",
+        "possible_triggers",
+        "gentle_observations",
+        "reflection_questions",
+        "small_steps",
+    ):
+        values = _safe_list(raw.get(key), 8)
+        if values:
+            result[key] = [_review_soften_text(item) for item in values]
+
+    return _review_soften_json(result)
+
+
+def _call_review_reflection_llm(stats: dict) -> dict | None:
+    if not llm_client.llm_enabled():
+        return None
+
+    model_name = os.getenv("REVIEW_REFLECTION_LLM_MODEL", "").strip() or None
+    try:
+        temperature = float(os.getenv("REVIEW_REFLECTION_LLM_TEMPERATURE", "0.2"))
+    except ValueError:
+        temperature = 0.2
+    try:
+        max_tokens = int(os.getenv("REVIEW_REFLECTION_LLM_MAX_TOKENS", "4096"))
+    except ValueError:
+        max_tokens = 4096
+
+    system_prompt = """你是 EmoBridge 的阶段性情绪复盘助手，不是诊断系统。
+你的任务是基于一段日期范围内的随手记、正式日记、身体感受、V-A 坐标和情绪颜色，生成温柔、克制、结构化的阶段性复盘。
+
+规则：
+- 只输出合法 JSON，不要 Markdown，不要 <think>。
+- 不要使用诊断式语言，不要说“你就是焦虑/抑郁/有问题”。
+- 多使用“可能”“看起来”“也许”“更像是”。
+- 不要把统计相关写成因果定论。
+- 身体信号只能作为线索，不能写成医学判断。
+- 不要建议用户停止用药、不要做医疗诊断。
+
+必须输出这些顶层字段：
+period_summary, emotional_pattern, color_story, main_emotions, fine_grained_emotions, possible_triggers, body_signal_summary, gentle_observations, reflection_questions, small_steps, non_diagnostic_note。
+
+main_emotions 必须是对象数组，每个对象包含 label 和 note。其余列表字段输出字符串数组。"""
+
+    compact_stats = {
+        "participant_code": stats.get("participant_code"),
+        "start_date": stats.get("start_date"),
+        "end_date": stats.get("end_date"),
+        "total_records": stats.get("total_records"),
+        "source_counts": stats.get("source_counts"),
+        "averages": stats.get("averages"),
+        "days": stats.get("days"),
+        "colors": stats.get("colors", [])[:12],
+        "primary_emotions": stats.get("primary_emotions", [])[:12],
+        "fine_emotions": stats.get("fine_emotions", [])[:16],
+        "triggers": stats.get("triggers", [])[:12],
+        "body_signals": stats.get("body_signals", [])[:12],
+        "records": stats.get("records", [])[-60:],
+    }
+
+    try:
+        parsed = llm_client.chat_json(
+            [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": json.dumps(compact_stats, ensure_ascii=False)},
+            ],
+            model=model_name,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+        return parsed if isinstance(parsed, dict) else None
+    except Exception as error:
+        print(f"[review] reflection LLM skipped: {error}")
         return None
 
 
@@ -1274,6 +1503,90 @@ async def reflect_diary_by_date(diary_date: str, payload: DiaryReflectRequest | 
         }
     except HTTPException:
         raise
+    except Exception as error:
+        raise _storage_error(error)
+
+
+@app.get("/api/review/overview")
+async def review_overview(
+    start_date: str | None = Query(default=None, description="Start date in YYYY-MM-DD"),
+    end_date: str | None = Query(default=None, description="End date in YYYY-MM-DD"),
+    participant_code: str | None = Query(default=None),
+):
+    try:
+        default_start, default_end = _review_default_dates()
+        start_text, end_text = normalize_review_range(start_date or default_start, end_date or default_end)
+        code = _review_participant_code(participant_code)
+        stats = get_review_overview(code, start_text, end_text)
+        return {
+            "status": "success",
+            "participant_code": code,
+            "start_date": start_text,
+            "end_date": end_text,
+            "period_type": review_period_type(start_text, end_text),
+            "stats": stats,
+        }
+    except Exception as error:
+        raise _storage_error(error)
+
+
+@app.get("/api/review/report")
+async def review_report(
+    start_date: str | None = Query(default=None, description="Start date in YYYY-MM-DD"),
+    end_date: str | None = Query(default=None, description="End date in YYYY-MM-DD"),
+    participant_code: str | None = Query(default=None),
+):
+    try:
+        default_start, default_end = _review_default_dates()
+        start_text, end_text = normalize_review_range(start_date or default_start, end_date or default_end)
+        code = _review_participant_code(participant_code)
+        report = get_emotion_review_report(
+            code,
+            start_text,
+            end_text,
+            review_period_type(start_text, end_text),
+        )
+        return {
+            "status": "success",
+            "participant_code": code,
+            "start_date": start_text,
+            "end_date": end_text,
+            "report": report,
+        }
+    except Exception as error:
+        raise _storage_error(error)
+
+
+@app.post("/api/review/reflect")
+async def review_reflect(payload: ReviewReflectRequest):
+    try:
+        payload_data = payload.model_dump() if hasattr(payload, "model_dump") else payload.dict()
+        start_text, end_text = normalize_review_range(payload_data.get("start_date"), payload_data.get("end_date"))
+        code = _review_participant_code(payload_data.get("participant_code"))
+        period = review_period_type(start_text, end_text)
+        stats = get_review_overview(code, start_text, end_text)
+        llm_report = _call_review_reflection_llm(stats)
+        report_json = _normalize_review_reflection(llm_report, stats)
+        saved_report = upsert_emotion_review_report(
+            code,
+            start_text,
+            end_text,
+            period,
+            stats,
+            report_json,
+            REVIEW_ANALYSIS_VERSION,
+        )
+        return {
+            "status": "success",
+            "participant_code": code,
+            "start_date": start_text,
+            "end_date": end_text,
+            "period_type": period,
+            "stats": stats,
+            "report": saved_report,
+            "report_json": report_json,
+            "llm_used": isinstance(llm_report, dict),
+        }
     except Exception as error:
         raise _storage_error(error)
 

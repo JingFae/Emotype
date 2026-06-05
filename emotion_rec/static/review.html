@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>情绪复盘 | EmoBridge</title>
+  <link rel="stylesheet" href="/static/styles.css?v=20260604" />
+  <link rel="stylesheet" href="/static/review.css?v=20260604" />
+</head>
+<body class="review-page">
+<main class="app-shell review-shell">
+  <header class="topbar review-topbar">
+    <a class="brand-mark" href="/" aria-label="EmoBridge 首页">
+      <img class="brand-icon2" src="/static/icon2-only.png" alt="" aria-hidden="true" />
+      <img class="brand-name-img" src="/static/name-text.png" alt="emobridge" />
+    </a>
+
+    <nav class="view-tabs" aria-label="Primary navigation">
+      <a class="tab-button" href="/">首页</a>
+      <a class="tab-button" href="/#journalView">随手记</a>
+      <a class="tab-button" href="/diary">日记本</a>
+      <a class="tab-button is-active" href="/review" aria-current="page">情绪复盘</a>
+      <a class="tab-button" href="/body-sensation">身体感受</a>
+    </nav>
+
+    <div class="topbar-right review-session">
+      <span class="review-session-label">阶段性复盘</span>
+      <span class="status-pill" id="reviewParticipant">local</span>
+    </div>
+  </header>
+
+  <section class="review-heading" aria-labelledby="reviewTitle">
+    <div>
+      <p class="eyebrow">Emotion Review</p>
+      <h1 id="reviewTitle">情绪复盘</h1>
+    </div>
+    <div class="review-range-controls">
+      <label class="review-date-control" for="reviewStartDate">
+        <span>开始</span>
+        <input id="reviewStartDate" type="date" />
+      </label>
+      <label class="review-date-control" for="reviewEndDate">
+        <span>结束</span>
+        <input id="reviewEndDate" type="date" />
+      </label>
+      <button class="warm-btn ghost" type="button" id="loadReviewBtn">查看统计</button>
+      <button class="warm-btn primary" type="button" id="reflectReviewBtn">生成复盘</button>
+    </div>
+  </section>
+
+  <section class="review-summary-grid" aria-label="复盘概览">
+    <article class="review-stat">
+      <span>记录总数</span>
+      <strong id="reviewTotalCount">0</strong>
+      <small id="reviewPeriodLabel">近 7 天</small>
+    </article>
+    <article class="review-stat">
+      <span>随手记</span>
+      <strong id="reviewJournalCount">0</strong>
+      <small>Journal</small>
+    </article>
+    <article class="review-stat">
+      <span>正式日记</span>
+      <strong id="reviewDiaryCount">0</strong>
+      <small>Diary</small>
+    </article>
+    <article class="review-stat">
+      <span>身体感受</span>
+      <strong id="reviewBodyCount">0</strong>
+      <small>Body</small>
+    </article>
+  </section>
+
+  <section class="review-layout" aria-label="情绪复盘工作区">
+    <section class="review-main-column">
+      <article class="review-panel trend-panel" aria-labelledby="trendTitle">
+        <div class="review-panel-head">
+          <div>
+            <p class="eyebrow">Trend</p>
+            <h2 id="trendTitle">情绪趋势</h2>
+          </div>
+          <span class="review-state" id="reviewLoadState">载入中</span>
+        </div>
+        <div class="review-chart-wrap">
+          <canvas id="reviewTrendCanvas" aria-label="情绪趋势图"></canvas>
+          <p class="review-empty" id="trendEmpty">这段时间还没有可绘制的 V-A 数据。</p>
+        </div>
+      </article>
+
+      <article class="review-panel" aria-labelledby="paletteTitle">
+        <div class="review-panel-head">
+          <div>
+            <p class="eyebrow">Palette</p>
+            <h2 id="paletteTitle">情绪颜色色板</h2>
+          </div>
+        </div>
+        <div class="review-color-palette" id="reviewColorPalette"></div>
+      </article>
+
+      <div class="review-two-column">
+        <article class="review-panel" aria-labelledby="emotionListTitle">
+          <div class="review-panel-head compact">
+            <div>
+              <p class="eyebrow">Emotions</p>
+              <h2 id="emotionListTitle">主要情绪</h2>
+            </div>
+          </div>
+          <div class="review-list" id="reviewPrimaryEmotions"></div>
+        </article>
+
+        <article class="review-panel" aria-labelledby="fineListTitle">
+          <div class="review-panel-head compact">
+            <div>
+              <p class="eyebrow">Fine</p>
+              <h2 id="fineListTitle">细粒度情绪</h2>
+            </div>
+          </div>
+          <div class="chip-row review-chip-row" id="reviewFineEmotions"></div>
+        </article>
+      </div>
+    </section>
+
+    <aside class="review-side-column">
+      <article class="review-panel" aria-labelledby="triggerTitle">
+        <div class="review-panel-head compact">
+          <div>
+            <p class="eyebrow">Signals</p>
+            <h2 id="triggerTitle">触发因素摘要</h2>
+          </div>
+        </div>
+        <div class="review-list detailed" id="reviewTriggers"></div>
+      </article>
+
+      <article class="review-panel" aria-labelledby="bodySignalTitle">
+        <div class="review-panel-head compact">
+          <div>
+            <p class="eyebrow">Body</p>
+            <h2 id="bodySignalTitle">身体信号摘要</h2>
+          </div>
+        </div>
+        <div class="review-list detailed" id="reviewBodySignals"></div>
+      </article>
+
+      <article class="review-panel ai-review-panel" aria-labelledby="aiReviewTitle">
+        <div class="review-panel-head">
+          <div>
+            <p class="eyebrow">AI Review</p>
+            <h2 id="aiReviewTitle">AI 阶段性复盘</h2>
+          </div>
+          <span class="review-state" id="reviewReportState">未生成</span>
+        </div>
+        <div class="ai-review-card" id="aiReviewCard">
+          <h3 id="aiPeriodSummary">还没有生成这段时间的复盘</h3>
+          <p id="aiPattern">打开页面只会加载统计数据；点击生成后会保存复盘，下次优先读取缓存。</p>
+          <div class="ai-review-section">
+            <span>可能触发</span>
+            <ul id="aiTriggers"></ul>
+          </div>
+          <div class="ai-review-section">
+            <span>身体线索</span>
+            <p id="aiBodySignals">-</p>
+          </div>
+          <div class="ai-review-section">
+            <span>可以继续问自己</span>
+            <ul id="aiQuestions"></ul>
+          </div>
+          <div class="ai-review-section">
+            <span>很小的一步</span>
+            <ul id="aiSmallSteps"></ul>
+          </div>
+          <p class="review-note" id="aiNonDiagnostic">这份复盘只是帮助整理线索，不用于诊断。</p>
+        </div>
+      </article>
+    </aside>
+  </section>
+</main>
+<script src="/static/review.js?v=20260604" defer></script>
+</body>
+</html>
