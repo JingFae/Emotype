@@ -17,6 +17,10 @@
 
 因此，EmoBridge 的定位不是医学诊断工具，也不是单一模型 demo，而是一个可本地运行和容器部署的 **HCI / 情感计算研究原型与情感可达性辅助系统**。它尤其关注难以准确辨认、组织或表达自身情绪的用户，但当前仓库尚未包含针对特定临床人群的有效性验证。
 
+下图从产品视角展示 EmoBridge 如何连接用户痛点、核心能力与“表达—感知—校准—记录—回顾”的价值闭环：
+
+![产品总览 Overview](docs/assets/product-overview_chinese.svg)
+
 ## 核心功能
 
 - **情绪感知随手记**：`emotion_rec/static/index.html` 与 `emotion_rec/static/app.js` 支持文字输入、浏览器 Web Speech API 听写和 `MediaRecorder → /api/transcribe` 回退。输入会被解析为分段 V-A、情绪候选和置信度，而不仅是保存原文。
@@ -48,6 +52,10 @@
 | `/healthz` | 服务、设备、本地语音模型和 LLM 配置状态 |
 
 ## 系统技术架构
+
+下图从工程视角展示多模态输入经过 Frontend、Backend API、AI / Model、统一情绪表示与数据库持久化，最终形成交互反馈的端到端流程：
+
+![技术架构 Pipeline](docs/assets/technical-pipeline_chinese.svg)
 
 ```text
 用户输入
