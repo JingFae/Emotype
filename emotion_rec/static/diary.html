@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>日记本 | EmoBridge</title>
+  <link rel="stylesheet" href="/static/styles.css?v=20260607a" />
+  <link rel="stylesheet" href="/static/diary.css?v=20260607a" />
+</head>
+<body class="diary-page">
+<main class="app-shell diary-shell">
+  <header class="topbar diary-topbar">
+    <a class="brand-mark" href="/" aria-label="EmoBridge 首页">
+      <img class="brand-icon2" src="/static/icon2-only.png" alt="" aria-hidden="true" />
+      <img class="brand-name-img" src="/static/name-text.png" alt="emobridge" />
+    </a>
+
+    <nav class="view-tabs" aria-label="Primary navigation">
+      <a class="tab-button" href="/" data-i18n="nav.home">首页</a>
+      <a class="tab-button is-active" href="/essay" aria-current="page" data-i18n="nav.essay">情绪随笔</a>
+      <a class="tab-button" href="/body-sensation" data-i18n="nav.body">身体感受</a>
+      <a class="tab-button" href="/emo-echo" data-i18n="nav.ecoEcho">Emo 回响</a>
+      <a class="tab-button" href="/historyreview" data-i18n="nav.historyReview">历史回顾</a>
+      <a class="tab-button" href="/profile" id="profileTab" style="display:none" data-i18n="nav.profile">个人信息</a>
+      <a class="tab-button" href="/login" id="authTab" data-i18n="nav.login">登录</a>
+    </nav>
+
+    <div class="topbar-right">
+    </div>
+  </header>
+
+  <section class="diary-heading" aria-labelledby="diaryTitle">
+    <div>
+      <p class="eyebrow" data-i18n="diary.eyebrow">Diary</p>
+      <h2 id="diaryTitle">日记本</h2>
+    </div>
+    <div class="diary-heading-actions">
+      <label class="diary-date-control" for="diaryDate">
+        <span data-i18n="diary.date">日期</span>
+        <input id="diaryDate" type="date" />
+      </label>
+      <button class="warm-btn ghost" type="button" id="refreshContextBtn" data-i18n="diary.refreshContext">查看今日情绪记录</button>
+    </div>
+  </section>
+
+  <section class="diary-workspace" aria-label="正式日记工作区">
+    <aside class="diary-panel context-panel" aria-labelledby="contextTitle">
+      <div class="panel-title-row">
+        <div>
+          <p class="eyebrow" data-i18n="diary.contextEyebrow">Today</p>
+          <h2 id="contextTitle" data-i18n="diary.contextTitle">今日记录</h2>
+        </div>
+        <span class="context-count" id="contextCount">0</span>
+      </div>
+      <div class="context-list" id="contextList"></div>
+      <div class="context-actions">
+        <button class="warm-btn ghost" type="button" id="insertContextBtn" data-i18n="diary.insertContext">插入选中摘要</button>
+      </div>
+    </aside>
+
+    <section class="diary-editor-panel" aria-labelledby="editorTitle">
+      <div class="diary-meta-row">
+        <label class="diary-select-control" for="physicalWeather">
+          <span data-i18n="diary.physicalWeather">现实天气</span>
+          <select id="physicalWeather" name="physical_weather"></select>
+        </label>
+        <label class="diary-select-control" for="moodWeather">
+          <span data-i18n="diary.moodWeather">心情天气</span>
+          <select id="moodWeather" name="mood_weather"></select>
+        </label>
+      </div>
+
+      <label class="diary-title-control" for="diaryEntryTitle">
+        <span id="editorTitle" data-i18n="diary.entryTitle">标题</span>
+        <input id="diaryEntryTitle" type="text" maxlength="240" placeholder="给今天留一个标题" autocomplete="off" />
+      </label>
+
+      <div class="diary-content-control">
+        <span data-i18n="diary.content">正式日记</span>
+        <!-- unified editor area: images on top, textarea below -->
+        <div class="diary-editor-area" id="diaryEditorArea">
+          <div id="diaryImageInlineArea" style="display:none; padding:10px 10px 0; flex-direction:column; gap:8px;"></div>
+          <textarea id="diaryContent" spellcheck="true" placeholder="完整写下今天发生的事、你的反应、身体感受和想留下来的细节。"></textarea>
+        </div>
+      </div>
+
+      <div class="image-upload-row" id="diaryImageRow">
+        <input type="file" id="diaryImageInput" accept="image/*" multiple style="display:none" />
+        <button class="warm-btn ghost" type="button" id="diaryImageBtn" style="font-size:13px;">上传图片</button>
+      </div>
+
+      <div class="diary-editor-footer">
+        <span class="save-state" id="saveState">就绪</span>
+        <div class="diary-editor-actions">
+          <button class="warm-btn ghost" type="button" id="voiceDiaryBtn" data-i18n="diary.voice">语音转文字</button>
+          <button class="warm-btn ghost" type="button" id="reflectDiaryBtn">情绪回顾</button>
+          <button class="warm-btn primary" type="button" id="saveDiaryBtn" data-i18n="diary.save">保存日记</button>
+        </div>
+      </div>
+    </section>
+
+    <aside class="diary-panel reflection-panel" aria-labelledby="reflectionTitle">
+      <div class="panel-title-row">
+        <div>
+          <p class="eyebrow" data-i18n="diary.reviewEyebrow">Review</p>
+          <h2 id="reflectionTitle">情绪回顾</h2>
+        </div>
+        <span class="reflection-state" id="reflectionState">待复盘</span>
+      </div>
+
+      <div class="reflection-card" id="reflectionCard">
+        <p class="reflection-kicker" id="reflectionPrimary">尚无结果</p>
+        <h3 id="reflectionSummary">写完后会生成当天复盘</h3>
+        <p id="reflectionGentle">复盘会参考正文、所选天气和今日情绪记录，但不会把情绪强行归因于天气。</p>
+        <div class="reflection-grid">
+          <div>
+            <span>可能触发</span>
+            <p id="reflectionTrigger">-</p>
+          </div>
+          <div>
+            <span>可能需要</span>
+            <p id="reflectionNeed">-</p>
+          </div>
+        </div>
+        <p class="weather-line" id="weatherReflection">-</p>
+      </div>
+
+      <section class="diary-va-block" aria-label="V-A 坐标结果">
+        <div class="va-control-head">
+          <span class="panel-label">V-A 坐标</span>
+          <strong id="diaryVAReadout">V +0.00 · A +0.00</strong>
+        </div>
+        <div class="diary-va-plane" id="diaryVAPlane">
+          <span class="va-axis va-axis-x"></span>
+          <span class="va-axis va-axis-y"></span>
+          <span class="va-axis-label va-positive">积极</span>
+          <span class="va-axis-label va-negative">消极</span>
+          <span class="va-axis-label va-high">高能量</span>
+          <span class="va-axis-label va-low">低能量</span>
+          <span class="diary-va-handle" id="diaryVAHandle" aria-hidden="true"></span>
+        </div>
+      </section>
+
+      <div class="reflection-details">
+        <div class="color-result">
+          <span class="color-swatch" id="emotionColorSwatch"></span>
+          <div>
+            <span>情绪颜色</span>
+            <strong id="emotionColorName">雾灰中性</strong>
+          </div>
+        </div>
+        <div>
+          <span class="detail-label">二级情绪</span>
+          <div class="chip-row diary-chip-row" id="secondaryEmotionChips"></div>
+        </div>
+        <div>
+          <span class="detail-label">细粒度情绪</span>
+          <div class="chip-row diary-chip-row" id="fineEmotionChips"></div>
+        </div>
+        <div>
+          <span class="detail-label">身体信号</span>
+          <div class="chip-row diary-chip-row" id="bodySignalChips"></div>
+        </div>
+        <ul class="question-list" id="reflectionQuestions"></ul>
+        <p class="small-action" id="smallActionSuggestion">-</p>
+      </div>
+    </aside>
+  </section>
+</main>
+<script src="/static/diary.js?v=20260607a" defer></script>
+<script src="/static/i18n.js?v=20260607a"></script>
+<script src="/static/auth.js?v=20260607a"></script>
+<script>
+(function () {
+  var btn = document.getElementById('diaryImageBtn');
+  var input = document.getElementById('diaryImageInput');
+  var preview = document.getElementById('diaryImagePreview');
+
+  window._diaryImageAnalyses = [];
+  // Use the new inline area (above textarea) as the image display target
+  var inlineArea = document.getElementById('diaryImageInlineArea');
+
+  if (btn && input) {
+    btn.addEventListener('click', function () { input.click(); });
+    input.addEventListener('change', function () {
+      Array.from(input.files).forEach(function (file) {
+        var reader = new FileReader();
+        reader.onload = function (e) {
+          // Show image immediately (no loading text)
+          var wrap = document.createElement('div');
+          wrap.style.cssText = 'position:relative;display:block;width:100%;';
+          var img = document.createElement('img');
+          img.src = e.target.result;
+          img.style.cssText = 'width:100%;max-height:220px;border-radius:6px;object-fit:cover;display:block;';
+          var rm = document.createElement('button');
+          rm.textContent = '×';
+          rm.style.cssText = 'position:absolute;top:6px;right:6px;width:22px;height:22px;border-radius:50%;border:none;background:rgba(0,0,0,0.45);color:#fff;font-size:13px;line-height:1;cursor:pointer;padding:0;';
+          var caption = document.createElement('div');
+          caption.style.cssText = 'margin-top:4px;font-size:12px;color:#6b7280;';
+          rm.addEventListener('click', function () {
+            if (wrap._analysisData) {
+              window._diaryImageAnalyses = window._diaryImageAnalyses.filter(function(x) { return x !== wrap._analysisData; });
+            }
+            wrap.remove();
+          });
+          wrap.appendChild(img);
+          wrap.appendChild(rm);
+          wrap.appendChild(caption);
+          if (inlineArea) {
+            inlineArea.style.display = 'flex';
+            inlineArea.appendChild(wrap);
+          }
+          var fd = new FormData();
+          fd.append('file', file);
+          fd.append('context', 'diary');
+          fetch('/api/uploads', { method: 'POST', body: fd })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+              if (!data || data.status !== 'success' || !data.analysis) { return; }
+              var a = data.analysis;
+              wrap._analysisData = a;
+              window._diaryImageAnalyses.push(a);
+              caption.innerHTML = '';
+              if (a.color) {
+                var dot = document.createElement('span');
+                dot.style.cssText = 'display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:middle;background:' + a.color + ';';
+                caption.appendChild(dot);
+              }
+              caption.appendChild(document.createTextNode(a.primary_emotion || '已分析'));
+            })
+            .catch(function () {});
+        };
+        reader.readAsDataURL(file);
+      });
+      input.value = '';
+    });
+  }
+})();
+</script>
+<script>
+(function () {
+  if (new URLSearchParams(location.search).get('embed')) {
+    document.documentElement.classList.add('embed-mode');
+    function _sendH() { window.parent.postMessage({ type: 'emb-height', height: document.documentElement.scrollHeight }, '*'); }
+    window.addEventListener('load', _sendH);
+    new MutationObserver(_sendH).observe(document.body, { childList: true, subtree: true, attributes: true, characterData: true });
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,5 +1,5 @@
 const views = document.querySelectorAll(".view");
-const viewButtons = document.querySelectorAll("[data-view-target]");
+const viewButtons = document.querySelectorAll("[data-view]");
 const journalText = document.querySelector("#journalText");
 const typeStage = document.querySelector("#typeStage");
 const analysisStatus = document.querySelector("#analysisStatus");
@@ -27,12 +27,6 @@ const clearEntries = document.querySelector("#clearEntries");
 const voiceButton = document.querySelector("#voiceButton");
 const typingMode = document.querySelector("#typingMode");
 const voiceMode = document.querySelector("#voiceMode");
-const participantForm = document.querySelector("#participantForm");
-const participantCodeInput = document.querySelector("#participantCode");
-const participantConsent = document.querySelector("#participantConsent");
-const participantStatus = document.querySelector("#participantStatus");
-const exportParticipantJson = document.querySelector("#exportParticipantJson");
-const exportParticipantCsv = document.querySelector("#exportParticipantCsv");
 const entryStorageMode = document.querySelector("#entryStorageMode");
 
 const palette = {
@@ -161,11 +155,12 @@ function candidateFromLabel(label, fallback = {}) {
 function switchView(targetId) {
   views.forEach((view) => view.classList.toggle("is-active", view.id === targetId));
   viewButtons.forEach((button) => {
-    const isActive = button.dataset.viewTarget === targetId;
+    const isActive = button.dataset.view === targetId;
     if (button.classList.contains("tab-button")) {
       button.classList.toggle("is-active", isActive);
     }
   });
+  if (targetId === "dataView") refreshDataCharts();
 }
 
 function setStatus(text) {
@@ -176,19 +171,12 @@ function participantCode() {
   return participant?.participant_code || "";
 }
 
-function setParticipantStatus(text) {
-  participantStatus.textContent = text;
-}
-
 function saveParticipant(nextParticipant) {
   participant = nextParticipant;
   if (participant) {
     localStorage.setItem("emomirror.participant", JSON.stringify(participant));
-    participantCodeInput.value = participant.participant_code;
-    setParticipantStatus(`已连接实验编号 ${participant.participant_code}`);
   } else {
     localStorage.removeItem("emomirror.participant");
-    setParticipantStatus("未连接实验编号，本机会先临时保存。");
   }
 }
 
@@ -239,9 +227,7 @@ async function loadParticipantEntries() {
     entries = (data.diary_entries || []).map(serverEntryToLocal);
     saveEntries();
     renderHome();
-    setParticipantStatus(`已加载 ${participantCode()} 的历史记录`);
   } catch (error) {
-    setParticipantStatus(`历史读取失败：${error.message}`);
     renderHome();
   }
 }
@@ -281,7 +267,6 @@ async function exportParticipant(format = "json") {
       exported_at: new Date().toISOString(),
     };
     downloadBlob(JSON.stringify(localBundle, null, 2), "emomirror-local-export.json", "application/json;charset=utf-8");
-    setParticipantStatus("已导出本地临时数据。");
     return;
   }
 
@@ -297,9 +282,8 @@ async function exportParticipant(format = "json") {
       `emomirror-${participantCode()}.${format}`,
       format === "json" ? "application/json;charset=utf-8" : "text/csv;charset=utf-8",
     );
-    setParticipantStatus(`已导出 ${format.toUpperCase()} 数据。`);
   } catch (error) {
-    setParticipantStatus(`导出失败：${error.message}`);
+    console.error("Export failed:", error.message);
   }
 }
 
@@ -904,45 +888,47 @@ function saveEntries() {
 }
 
 function renderHome() {
-  entryCount.textContent = String(entries.length);
-  homeIntensity.textContent = `${intensityRange.value}%`;
-  entryStorageMode.textContent = participantCode() ? `synced as ${participantCode()}` : "local only";
+  if (entryCount)      entryCount.textContent      = String(entries.length);
+  if (homeIntensity)   homeIntensity.textContent   = `${intensityRange.value}%`;
+  if (entryStorageMode) entryStorageMode.textContent = participantCode() ? `synced as ${participantCode()}` : (currentLang === "zh" ? "仅本地" : "local only");
 
   if (entries.length) {
     const latest = entries[0];
     latestEmotion.textContent = latest.label;
     latestConfidence.textContent = `${latest.confidence}% confidence`;
-    homeMirrorWord.textContent = latest.label.split("/")[0].trim().toLowerCase();
-    homeMirrorCaption.textContent = latest.date;
+    if (homeMirrorWord)    homeMirrorWord.textContent    = latest.label.split("/")[0].trim().toLowerCase();
+    if (homeMirrorCaption) homeMirrorCaption.textContent = latest.date;
   } else {
-    latestEmotion.textContent = "中性";
-    latestConfidence.textContent = "waiting for text";
-    homeMirrorWord.textContent = "steady";
-    homeMirrorCaption.textContent = "No entry yet today";
+    latestEmotion.textContent = currentLang === "zh" ? "中性" : "Neutral";
+    latestConfidence.textContent = currentLang === "zh" ? "等待输入" : "waiting for text";
+    if (homeMirrorWord)    homeMirrorWord.textContent    = "steady";
+    if (homeMirrorCaption) homeMirrorCaption.textContent = "No entry yet today";
   }
 
   entryList.textContent = "";
   if (!entries.length) {
-    const empty = document.createElement("article");
-    empty.className = "entry-card";
-    const title = document.createElement("strong");
-    const copy = document.createElement("p");
-    title.textContent = "No local entries yet";
-    copy.textContent = "Your saved reflections will appear here on this device.";
-    empty.append(title, copy);
+    const empty = document.createElement("p");
+    empty.style.cssText = "color:var(--muted-light);font-size:14px;padding:20px 0;";
+    empty.textContent = currentLang === "zh" ? "还没有记录，去写第一篇日记吧 ✏️" : "No entries yet. Start journaling ✏️";
     entryList.appendChild(empty);
     return;
   }
 
-  entries.slice(0, 6).forEach((entry) => {
+  // Show ALL entries, newest first
+  entries.forEach((entry) => {
     const card = document.createElement("article");
     card.className = "entry-card";
+    const dot = document.createElement("span");
+    dot.style.cssText = `display:inline-block;width:10px;height:10px;border-radius:50%;background:${entry.color || "var(--amber)"};margin-right:7px;flex-shrink:0;margin-top:3px;`;
     const title = document.createElement("strong");
+    title.style.display = "flex";
+    title.style.alignItems = "flex-start";
+    title.append(dot, entry.label || "中性");
     const copy = document.createElement("p");
+    copy.textContent = entry.text || "";
     const date = document.createElement("small");
-    title.textContent = entry.label;
-    copy.textContent = entry.text;
-    date.textContent = entry.date;
+    date.textContent = entry.date || "";
+    date.style.color = "var(--muted-light)";
     card.append(title, copy, date);
     entryList.appendChild(card);
   });
@@ -969,66 +955,91 @@ async function saveCurrentEntry() {
     synced: false,
   };
 
-  if (participantCode()) {
-    try {
-      const data = await apiJson("/diaries", {
-        method: "POST",
-        body: JSON.stringify({
-          participant_code: participantCode(),
-          raw_text: text,
-          transcript_text: text,
-          original_valence: original.valence,
-          original_arousal: original.arousal,
-          original_label: original.label,
-          final_valence: mapping.valence,
-          final_arousal: mapping.arousal,
-          final_label: selectedLabel || mapping.label,
-          final_color: mapping.color,
-          candidates_json: currentCandidates,
-          text_emotion_json: currentAnalysisPayload.text_emotion || {},
-          va_mapping_json: {
-            ...(currentAnalysisPayload.va_mapping || {}),
-            final_override: {
-              valence: mapping.valence,
-              arousal: mapping.arousal,
-              label: selectedLabel || mapping.label,
-              color: mapping.color,
-              quadrant: mapping.quadrant,
-            },
+  const _saveCode = participantCode() || "local";
+  try {
+    const data = await apiJson("/diaries", {
+      method: "POST",
+      body: JSON.stringify({
+        participant_code: _saveCode,
+        raw_text: text,
+        transcript_text: text,
+        original_valence: original.valence,
+        original_arousal: original.arousal,
+        original_label: original.label,
+        final_valence: mapping.valence,
+        final_arousal: mapping.arousal,
+        final_label: selectedLabel || mapping.label,
+        final_color: mapping.color,
+        candidates_json: currentCandidates,
+        text_emotion_json: currentAnalysisPayload.text_emotion || {},
+        va_mapping_json: {
+          ...(currentAnalysisPayload.va_mapping || {}),
+          final_override: {
+            valence: mapping.valence,
+            arousal: mapping.arousal,
+            label: selectedLabel || mapping.label,
+            color: mapping.color,
+            quadrant: mapping.quadrant,
           },
-        }),
-      });
-      entries.unshift(serverEntryToLocal(data.diary_entry));
-      entries = entries.slice(0, 24);
-      saveEntries();
-      renderHome();
-      setStatus("Saved to research log");
-      return;
-    } catch (error) {
-      setStatus("Saved locally; sync failed");
-      setParticipantStatus(`保存到数据库失败：${error.message}`);
-    }
+        },
+      }),
+    });
+    entries.unshift(serverEntryToLocal(data.diary_entry));
+    entries = entries.slice(0, 24);
+    saveEntries();
+    renderHome();
+    setStatus("Saved");
+    return;
+  } catch (error) {
+    setStatus("Saved locally; sync failed");
+    console.error("Save to server failed:", error.message);
   }
 
   entries.unshift(localEntry);
   entries = entries.slice(0, 12);
   saveEntries();
   renderHome();
-  if (!participantCode()) setStatus("Saved locally");
+  setStatus("Saved locally");
+}
+
+let mediaRecorder = null;
+let mediaChunks = [];
+
+async function _transcribeJournalWithServer(blob) {
+  const fd = new FormData();
+  fd.append("file", blob, "audio.webm");
+  try {
+    voiceButton.textContent = "识别中…";
+    const res = await fetch("/api/transcribe", { method: "POST", body: fd });
+    if (!res.ok) throw new Error(await res.text());
+    const { text } = await res.json();
+    if (text) {
+      const spacer = journalText.value.trim() ? " " : "";
+      journalText.value += `${spacer}${text.trim()}`;
+      scheduleAnalysis();
+    }
+  } catch (err) {
+    setStatus("识别失败，请重试");
+  } finally {
+    voiceButton.textContent = "开始语音";
+    voiceMode.classList.remove("is-active");
+    typingMode.classList.add("is-active");
+    isListening = false;
+  }
 }
 
 function setupSpeechRecognition() {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRecognition) {
-    voiceButton.disabled = true;
-    voiceButton.textContent = "Voice unavailable";
+    voiceButton.textContent = "开始录音";
+    voiceButton.title = "浏览器不支持实时语音识别，将录音后上传识别";
     return;
   }
 
   recognition = new SpeechRecognition();
   recognition.continuous = true;
   recognition.interimResults = true;
-  recognition.lang = navigator.language || "en-US";
+  recognition.lang = "zh-CN";
 
   recognition.onresult = (event) => {
     let finalText = "";
@@ -1043,40 +1054,70 @@ function setupSpeechRecognition() {
       journalText.value += `${spacer}${finalText.trim()}`;
       scheduleAnalysis();
     }
-    setStatus(interimText ? "Listening" : "Voice captured");
+    setStatus(interimText ? "正在听写…" : "语音已捕获");
   };
 
   recognition.onend = () => {
     isListening = false;
-    voiceButton.textContent = "Start voice";
+    voiceButton.textContent = "开始语音";
     typingMode.classList.add("is-active");
     voiceMode.classList.remove("is-active");
   };
 
-  recognition.onerror = () => {
+  recognition.onerror = (event) => {
     isListening = false;
-    voiceButton.textContent = "Start voice";
-    setStatus("Voice unavailable");
+    voiceButton.textContent = "开始语音";
+    const msgs = {
+      "not-allowed": "请在浏览器中允许麦克风权限，然后重试",
+      "network": "语音识别需要网络连接（使用 Google 服务），请检查网络",
+      "no-speech": "没有检测到语音，请靠近麦克风重试",
+      "audio-capture": "麦克风不可用，请检查设备",
+    };
+    setStatus(msgs[event.error] || "语音识别出错，请重试");
   };
 }
 
 function toggleVoice() {
-  if (!recognition) return;
   if (isListening) {
-    recognition.stop();
+    if (recognition) recognition.stop();
+    if (mediaRecorder && mediaRecorder.state === "recording") mediaRecorder.stop();
     return;
   }
-  isListening = true;
-  voiceButton.textContent = "Stop voice";
-  typingMode.classList.remove("is-active");
-  voiceMode.classList.add("is-active");
-  try {
-    recognition.start();
-  } catch (error) {
-    isListening = false;
-    voiceButton.textContent = "Start voice";
-    setStatus("Voice paused");
+
+  // Prefer Web Speech API
+  if (recognition) {
+    isListening = true;
+    voiceButton.textContent = "停止语音";
+    typingMode.classList.remove("is-active");
+    voiceMode.classList.add("is-active");
+    try {
+      recognition.start();
+    } catch (error) {
+      isListening = false;
+      voiceButton.textContent = "开始语音";
+      setStatus("语音启动失败，请重试");
+    }
+    return;
   }
+
+  // Fallback: MediaRecorder → server Whisper
+  navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
+    isListening = true;
+    mediaChunks = [];
+    voiceButton.textContent = "停止录音";
+    typingMode.classList.remove("is-active");
+    voiceMode.classList.add("is-active");
+    mediaRecorder = new MediaRecorder(stream);
+    mediaRecorder.ondataavailable = (e) => { if (e.data.size) mediaChunks.push(e.data); };
+    mediaRecorder.onstop = () => {
+      stream.getTracks().forEach((t) => t.stop());
+      const blob = new Blob(mediaChunks, { type: "audio/webm" });
+      _transcribeJournalWithServer(blob);
+    };
+    mediaRecorder.start();
+  }).catch(() => {
+    setStatus("麦克风权限被拒绝，请在浏览器设置中允许");
+  });
 }
 
 function mappingFromPointer(event) {
@@ -1102,50 +1143,18 @@ function nudgeVA(deltaValence, deltaArousal) {
     arousal: clampNumber(base.arousal + deltaArousal),
     confidence: base.source_confidence ?? base.confidence ?? 0.8,
   }), { refreshCandidates: true });
-  logUsageEvent("va_coordinate_adjusted", {
-    valence: currentOverallMapping?.valence,
-    arousal: currentOverallMapping?.arousal,
-    label: currentOverallMapping?.label,
-    method: "keyboard",
-  });
   setStatus("Coordinate adjusted");
 }
 
 async function connectParticipant(event) {
   event.preventDefault();
-  const code = participantCodeInput.value.trim();
-  if (!code) {
-    setParticipantStatus("请输入实验编号，例如 P001。");
-    return;
-  }
-  if (!participantConsent.checked) {
-    setParticipantStatus("需要先同意保存日记和操作日志，才能连接实验编号。");
-    return;
-  }
-  setParticipantStatus("正在连接实验编号...");
-  try {
-    const data = await apiJson("/participants/session", {
-      method: "POST",
-      body: JSON.stringify({
-        participant_code: code,
-        consent_version: "research-v1",
-      }),
-    });
-    saveParticipant(data.participant);
-    await loadParticipantEntries();
-  } catch (error) {
-    setParticipantStatus(`连接失败：${error.message}`);
-  }
 }
 
 function bindEvents() {
   viewButtons.forEach((button) => {
-    button.addEventListener("click", () => switchView(button.dataset.viewTarget));
+    button.addEventListener("click", () => switchView(button.dataset.view));
   });
 
-  participantForm.addEventListener("submit", connectParticipant);
-  exportParticipantJson.addEventListener("click", () => exportParticipant("json"));
-  exportParticipantCsv.addEventListener("click", () => exportParticipant("csv"));
   journalText.addEventListener("input", scheduleAnalysis);
   intensityRange.addEventListener("input", () => {
     homeIntensity.textContent = `${intensityRange.value}%`;
@@ -1186,12 +1195,6 @@ function bindEvents() {
   });
   vaPlane.addEventListener("pointerup", () => {
     isDraggingVA = false;
-    logUsageEvent("va_coordinate_adjusted", {
-      valence: currentOverallMapping?.valence,
-      arousal: currentOverallMapping?.arousal,
-      label: currentOverallMapping?.label,
-      method: "pointer",
-    });
   });
   vaPlane.addEventListener("pointercancel", () => {
     isDraggingVA = false;
@@ -1209,11 +1212,11 @@ function bindEvents() {
     event.preventDefault();
     nudgeVA(move[0], move[1]);
   });
-  clearEntries.addEventListener("click", () => {
-    entries = [];
-    saveEntries();
-    renderHome();
-  });
+  if (clearEntries) clearEntries.addEventListener("click", () => clearAllRecords());
+  const dataExportJson = document.getElementById("dataExportJson");
+  const dataExportCsv = document.getElementById("dataExportCsv");
+  if (dataExportJson) dataExportJson.addEventListener("click", () => exportParticipant("json"));
+  if (dataExportCsv) dataExportCsv.addEventListener("click", () => exportParticipant("csv"));
   voiceButton.addEventListener("click", toggleVoice);
   voiceMode.addEventListener("click", toggleVoice);
   typingMode.addEventListener("click", () => {
@@ -1227,8 +1230,13 @@ async function boot() {
   await vaMapper().loadEmotionLexicon();
   if (participant) saveParticipant(participant);
   else saveParticipant(null);
+  initI18n();
+  startDateTicker();
   bindEvents();
   setupSpeechRecognition();
+  initBodyTab();
+  const initialView = String(window.location.hash || "").replace("#", "");
+  if (initialView && document.getElementById(initialView)) switchView(initialView);
   renderChips("");
   renderPrompts(localEmotion("").prompts);
   renderTypography(journalText.value, localDesign(journalText.value), localVAMapping(journalText.value));
@@ -1236,5 +1244,543 @@ async function boot() {
   else renderHome();
   scheduleAnalysis();
 }
+
+/* ============================================================
+   I18N — Bilingual zh / en
+   ============================================================ */
+const I18N = {
+  zh: {
+    "brand.tag": "情绪镜像日记",
+    "nav.home": "首页", "nav.journal": "随手记", "nav.diaryBook": "日记本", "nav.review": "情绪复盘", "nav.records": "历史记录", "nav.body": "身体感受", "nav.data": "数据",
+    "nav.essay": "情绪随笔", "nav.ecoEcho": "Emo 回响", "nav.historyReview": "历史回顾", "nav.profile": "个人信息", "nav.login": "登录",
+    "topbar.local": "本地模式",
+    "research.title": "研究模式", "research.code": "实验编号", "research.consent": "同意保存日记和操作日志用于研究分析",
+    "research.connect": "进入记录", "research.exportJson": "导出 JSON", "research.exportCsv": "导出 CSV",
+    "research.status": "未连接实验编号，本机临时保存。",
+    "home.title": "感受你的情绪",
+    "home.subtitle": "写下或说出今天发生的事，EmoBridge 会把你的情绪转化成流动的文字与色彩。",
+    "home.cta": "开始今天的记录",
+    "home.stat.entries": "记录条数", "home.stat.localOnly": "仅本地", "home.stat.latest": "最新情绪",
+    "home.stat.waiting": "等待输入", "home.stat.intensity": "镜像强度", "home.stat.intensityHint": "可在日记页调整",
+    "home.recent.eyebrow": "从新到旧", "home.recent.title": "情绪日记", "home.recent.clear": "清除本地记录",
+    "journal.eyebrow": "表达性写作", "journal.title": "今天的记录", "journal.ready": "就绪",
+    "journal.modeType": "文字输入", "journal.modeVoice": "语音转文字",
+    "journal.placeholder": "写下发生了什么。可以具体、模糊、矛盾，或者不确定。",
+    "journal.intensity": "镜像反馈强度", "journal.startVoice": "开始语音", "journal.save": "保存记录",
+    "journal.mirror.eyebrow": "情绪动态字体", "journal.mirror.title": "实时镜像",
+    "journal.detected": "识别结果", "journal.customLabel": "自定义标签",
+    "journal.customPlaceholder": "输入更贴近的情绪词", "journal.apply": "应用",
+    "journal.va": "V-A 坐标",
+    "va.positive": "积极", "va.negative": "消极", "va.high": "高能量", "va.low": "低能量",
+    "body.eyebrow": "情绪与身体", "body.title": "身体感受",
+    "body.subtitle": "选择身体不适部位和感受，结合最近日记，生成温和缓解提示。",
+    "body.diagram": "身体部位图", "body.svgPlaceholder": "人体图即将上线", "body.svgHint": "通过右侧选择部位与感受",
+    "body.selected": "已选组合", "body.noPairs": "暂无",
+    "body.journalRef": "当前日记参考", "body.journalRefPlaceholder": "填写当前的日记内容（可选）",
+    "body.selectRegion": "选择部位", "body.selectSymptom": "选择感受",
+    "body.details": "详细信息", "body.severity": "程度", "body.duration": "持续时间",
+    "body.addPair": "加入组合", "body.clearPairs": "清空",
+    "body.describe": "补充描述", "body.describePlaceholder": "今天喝水较少，坐着学习了很久…",
+    "body.generate": "生成身体感受建议", "body.statusHint": "系统会综合身体感受和最近日记。",
+    "data.eyebrow": "数据与洞察", "data.title": "情绪数据",
+    "data.emotionFreq": "情绪频率分布", "data.refresh": "刷新",
+    "data.noData": "暂无记录，先去写日记吧 ✏️",
+    "data.vaHistory": "V-A 坐标历史",
+    "data.export": "导出数据", "data.exportHint": "包含所有本地保存的日记记录。",
+    "data.summary": "记录摘要", "data.danger": "危险操作",
+  },
+  en: {
+    "brand.tag": "Emotion Mirror Journal",
+    "nav.home": "Home", "nav.journal": "Journal", "nav.diaryBook": "Diary", "nav.review": "Review", "nav.records": "Records", "nav.body": "Body Sense", "nav.data": "Data",
+    "nav.essay": "Journal", "nav.ecoEcho": "Emo Echo", "nav.historyReview": "History", "nav.profile": "Profile", "nav.login": "Login",
+    "topbar.local": "Local mode",
+    "research.title": "Research mode", "research.code": "Participant ID", "research.consent": "I agree to save journals and logs for research",
+    "research.connect": "Connect", "research.exportJson": "Export JSON", "research.exportCsv": "Export CSV",
+    "research.status": "No participant ID. Saving locally.",
+    "home.title": "Feel your emotion",
+    "home.subtitle": "Write or speak. EmoBridge turns subtle emotional signals into living type.",
+    "home.cta": "Start today's entry",
+    "home.stat.entries": "Entries", "home.stat.localOnly": "local only", "home.stat.latest": "Latest label",
+    "home.stat.waiting": "waiting for text", "home.stat.intensity": "Mirror intensity", "home.stat.intensityHint": "adjustable in journal",
+    "home.recent.eyebrow": "Newest first", "home.recent.title": "Emotion Journal", "home.recent.clear": "Clear local entries",
+    "journal.eyebrow": "Expressive writing", "journal.title": "Today's entry", "journal.ready": "Ready",
+    "journal.modeType": "Type", "journal.modeVoice": "Voice to text",
+    "journal.placeholder": "Write what happened. Be specific, vague, contradictory, or unsure.",
+    "journal.intensity": "Feedback intensity", "journal.startVoice": "Start voice", "journal.save": "Save entry",
+    "journal.mirror.eyebrow": "Kinetic affective type", "journal.mirror.title": "Live mirror",
+    "journal.detected": "Detected", "journal.customLabel": "Custom label",
+    "journal.customPlaceholder": "Type a closer emotion word", "journal.apply": "Apply",
+    "journal.va": "V-A Coordinate",
+    "va.positive": "Positive", "va.negative": "Negative", "va.high": "High energy", "va.low": "Low energy",
+    "body.eyebrow": "Emotion & Body", "body.title": "Body Sensation",
+    "body.subtitle": "Select body regions and symptoms. The system combines body cues with recent journals.",
+    "body.diagram": "Body diagram", "body.svgPlaceholder": "Body diagram coming soon", "body.svgHint": "Select region & symptom on the right",
+    "body.selected": "Selected pairs", "body.noPairs": "None yet",
+    "body.journalRef": "Journal reference", "body.journalRefPlaceholder": "Paste today's journal (optional)",
+    "body.selectRegion": "Select region", "body.selectSymptom": "Select symptom",
+    "body.details": "Details", "body.severity": "Severity", "body.duration": "Duration",
+    "body.addPair": "Add pair", "body.clearPairs": "Clear",
+    "body.describe": "Describe more", "body.describePlaceholder": "Less water today, studied for hours…",
+    "body.generate": "Generate advice", "body.statusHint": "System combines body cues and recent journals.",
+    "data.eyebrow": "Insights", "data.title": "Emotion Data",
+    "data.emotionFreq": "Emotion frequency", "data.refresh": "Refresh",
+    "data.noData": "No entries yet. Start journaling ✏️",
+    "data.vaHistory": "V-A history",
+    "data.export": "Export data", "data.exportHint": "Includes all locally saved journal entries.",
+    "data.summary": "Summary", "data.danger": "Danger zone",
+  }
+};
+
+let currentLang = localStorage.getItem("emomirror.lang") || "zh";
+
+function t(key) {
+  return (I18N[currentLang] || I18N.zh)[key] || (I18N.zh)[key] || key;
+}
+
+function applyI18n() {
+  document.documentElement.lang = currentLang === "zh" ? "zh-CN" : "en";
+  document.querySelectorAll("[data-i18n]").forEach((el) => {
+    const key = el.dataset.i18n;
+    el.textContent = t(key);
+  });
+  document.querySelectorAll("[data-i18n-placeholder]").forEach((el) => {
+    const key = el.dataset.i18nPlaceholder;
+    el.placeholder = t(key);
+  });
+}
+
+function initI18n() {
+  applyI18n();
+}
+
+/* ============================================================
+   BODY TAB — region → specific symptoms (including positive)
+   ============================================================ */
+const BODY_STRUCTURE = [
+  { id: "head", zh: "头部", en: "Head", symptoms: [
+    { id: "headache",      zh: "头疼",        en: "Headache" },
+    { id: "dizziness",     zh: "头晕",        en: "Dizziness" },
+    { id: "brain_fog",     zh: "脑雾/注意力涣散", en: "Brain fog" },
+    { id: "tinnitus",      zh: "耳鸣",        en: "Ear ringing" },
+    { id: "clear_head",    zh: "头脑清晰",    en: "Clear mind",  positive: true },
+    { id: "focused",       zh: "专注有力",    en: "Focused",     positive: true },
+  ]},
+  { id: "eyes", zh: "眼部", en: "Eyes", symptoms: [
+    { id: "eye_strain",    zh: "眼疲劳",      en: "Eye strain" },
+    { id: "dry_eyes",      zh: "眼干",        en: "Dry eyes" },
+    { id: "blurred",       zh: "视物模糊",    en: "Blurred vision" },
+    { id: "bright_eyes",   zh: "眼神明亮",    en: "Eyes feel bright", positive: true },
+  ]},
+  { id: "throat_mouth", zh: "口咽", en: "Throat", symptoms: [
+    { id: "throat_tight",  zh: "喉咙紧/异物感", en: "Throat tightness" },
+    { id: "dry_throat",    zh: "嗓子干",      en: "Dry throat" },
+    { id: "jaw_tension",   zh: "下颌/牙关紧绷", en: "Jaw tension" },
+    { id: "voice_clear",   zh: "声音通畅",    en: "Voice clear",  positive: true },
+  ]},
+  { id: "chest", zh: "胸口", en: "Chest", symptoms: [
+    { id: "chest_tight",   zh: "胸闷/压迫感", en: "Chest tightness" },
+    { id: "palpitation",   zh: "心跳过快/心慌", en: "Palpitation" },
+    { id: "short_breath",  zh: "呼吸困难/气短", en: "Shortness of breath" },
+    { id: "chest_open",    zh: "呼吸顺畅",    en: "Breathing easy", positive: true },
+    { id: "heart_warm",    zh: "心里温暖",    en: "Heart feels warm", positive: true },
+  ]},
+  { id: "shoulder_neck", zh: "肩颈", en: "Shoulder/Neck", symptoms: [
+    { id: "neck_stiff",    zh: "颈部僵硬",    en: "Neck stiffness" },
+    { id: "shoulder_pain", zh: "肩膀酸痛",    en: "Shoulder ache" },
+    { id: "muscle_tight",  zh: "肌肉紧绷",    en: "Muscle tension" },
+    { id: "shoulder_relax",zh: "肩颈放松",    en: "Shoulders relaxed", positive: true },
+  ]},
+  { id: "stomach", zh: "胃部", en: "Stomach", symptoms: [
+    { id: "stomach_pain",  zh: "胃痛/痉挛",   en: "Stomach cramp" },
+    { id: "nausea",        zh: "恶心/反胃",   en: "Nausea" },
+    { id: "appetite_loss", zh: "食欲下降",    en: "Appetite loss" },
+    { id: "bloating",      zh: "腹胀/胀气",   en: "Bloating" },
+    { id: "appetite_good", zh: "食欲好",      en: "Good appetite", positive: true },
+    { id: "stomach_comfy", zh: "胃部舒适",    en: "Stomach comfortable", positive: true },
+  ]},
+  { id: "back", zh: "腰背", en: "Back", symptoms: [
+    { id: "lower_back",    zh: "腰酸背痛",    en: "Lower back pain" },
+    { id: "back_stiff",    zh: "背部僵硬",    en: "Back stiffness" },
+    { id: "back_relax",    zh: "腰背舒展",    en: "Back feeling loose", positive: true },
+  ]},
+  { id: "hands", zh: "手部", en: "Hands", symptoms: [
+    { id: "hand_shaking",  zh: "手抖",        en: "Shaking hands" },
+    { id: "cold_hands",    zh: "手冰凉",      en: "Cold hands" },
+    { id: "sweaty_hands",  zh: "手心出汗",    en: "Sweaty palms" },
+    { id: "hands_warm",    zh: "双手温暖",    en: "Hands feel warm", positive: true },
+  ]},
+  { id: "legs", zh: "腿部", en: "Legs", symptoms: [
+    { id: "leg_heavy",     zh: "腿沉/无力",   en: "Heavy/weak legs" },
+    { id: "cold_feet",     zh: "脚冰凉",      en: "Cold feet" },
+    { id: "restless_legs", zh: "腿部躁动不安", en: "Restless legs" },
+    { id: "legs_light",    zh: "步伐轻盈",    en: "Legs feel light", positive: true },
+  ]},
+  { id: "whole_body", zh: "全身", en: "Whole body", symptoms: [
+    { id: "fatigue",       zh: "疲惫/乏力",   en: "Fatigue" },
+    { id: "insomnia",      zh: "失眠/睡眠差",  en: "Insomnia" },
+    { id: "sweating",      zh: "出汗/冷汗",   en: "Sweating" },
+    { id: "restless",      zh: "坐立不安",    en: "Restlessness" },
+    { id: "energized",     zh: "精力充沛",    en: "Energized",        positive: true },
+    { id: "calm_body",     zh: "全身放松",    en: "Body at ease",     positive: true },
+    { id: "grounded",      zh: "踏实稳定",    en: "Feeling grounded", positive: true },
+  ]},
+];
+
+let bodySelectedRegion = BODY_STRUCTURE[0];
+let bodySelectedSymptom = BODY_STRUCTURE[0].symptoms[0];
+let bodyPairs = [];
+
+function bodyLabel(item) {
+  return currentLang === "zh" ? item.zh : item.en;
+}
+
+// Update journal date display
+function updateJournalDate() {
+  const el = document.getElementById("journalDateDisplay");
+  if (!el) return;
+  const now = new Date();
+  const days    = ["日", "一", "二", "三", "四", "五", "六"];
+  const daysEn  = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const m = now.getMonth() + 1;
+  const d = now.getDate();
+  if (currentLang === "zh") {
+    el.textContent = `${now.getFullYear()}.${m}.${d} 星期${days[now.getDay()]}`;
+  } else {
+    el.textContent = `${now.getFullYear()}.${m}.${d} ${daysEn[now.getDay()]}`;
+  }
+}
+
+// Keep date ticking — update every minute
+function startDateTicker() {
+  updateJournalDate();
+  const msToNextMinute = (60 - new Date().getSeconds()) * 1000;
+  setTimeout(() => {
+    updateJournalDate();
+    setInterval(updateJournalDate, 60000);
+  }, msToNextMinute);
+}
+
+function renderBodyChips() {
+  const regionBox = document.getElementById("bodyRegionChips");
+  const symptomBox = document.getElementById("bodySymptomChips");
+  if (!regionBox || !symptomBox) return;
+
+  // Region chips
+  regionBox.innerHTML = "";
+  BODY_STRUCTURE.forEach((region) => {
+    const btn = document.createElement("button");
+    btn.className = `body-chip${bodySelectedRegion.id === region.id ? " selected" : ""}`;
+    btn.textContent = bodyLabel(region);
+    btn.type = "button";
+    btn.onclick = () => {
+      bodySelectedRegion = region;
+      bodySelectedSymptom = region.symptoms[0];
+      renderBodyChips();
+    };
+    regionBox.appendChild(btn);
+  });
+
+  // Symptom chips — only for selected region, positive ones styled green
+  symptomBox.innerHTML = "";
+  const header = document.createElement("div");
+  header.style.cssText = "font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px;width:100%;";
+  header.textContent = bodyLabel(bodySelectedRegion) + " " + (currentLang === "zh" ? "相关感受：" : "symptoms:");
+  symptomBox.appendChild(header);
+
+  bodySelectedRegion.symptoms.forEach((sym) => {
+    const btn = document.createElement("button");
+    const isSelected = bodySelectedSymptom.id === sym.id;
+    btn.className = `body-chip${sym.positive ? " positive" : ""}${isSelected ? " selected" : ""}`;
+    btn.textContent = bodyLabel(sym);
+    btn.type = "button";
+    btn.onclick = () => { bodySelectedSymptom = sym; renderBodyChips(); };
+    symptomBox.appendChild(btn);
+  });
+}
+
+function renderBodyPairs() {
+  const box = document.getElementById("bodyPairsView");
+  if (!box) return;
+  if (!bodyPairs.length) {
+    box.textContent = t("body.noPairs");
+    return;
+  }
+  box.innerHTML = bodyPairs.map((p, i) => `
+    <div class="body-pair-item">
+      <div><b>${bodyLabel(p.region)}</b> → ${bodyLabel(p.symptom)}
+        <div style="font-size:11px;color:var(--muted-light);">${currentLang === "zh" ? "严重程度" : "Severity"}: ${p.severity} / 5</div>
+      </div>
+      <button onclick="removeBodyPair(${i})" type="button">✕</button>
+    </div>
+  `).join("");
+}
+
+function removeBodyPair(i) {
+  bodyPairs.splice(i, 1);
+  renderBodyPairs();
+}
+
+async function clearAllRecords() {
+  if (!confirm("确定要清除所有记录吗？此操作不可撤销。")) return;
+  const code = (participant?.participant_code || "local").trim() || "local";
+  try {
+    await fetch(`/participants/${encodeURIComponent(code)}/all-data`, { method: "DELETE" });
+  } catch (e) {}
+  entries = [];
+  participant = null;
+  localStorage.removeItem("emomirror.entries");
+  localStorage.removeItem("emomirror.participant");
+  localStorage.removeItem("emotype_participant_code");
+  localStorage.removeItem("participant_code");
+  localStorage.removeItem("participantCode");
+  renderHome();
+}
+
+function bodyParticipantCode() {
+  try { return localStorage.getItem("emomirror.participant") && JSON.parse(localStorage.getItem("emomirror.participant"))?.participant_code || ""; }
+  catch (e) { return ""; }
+}
+
+async function submitBodyAdvice() {
+  const btn = document.getElementById("bodySubmitBtn");
+  const status = document.getElementById("bodySubmitStatus");
+  const adviceBox = document.getElementById("bodyAdvice");
+  if (!btn || !adviceBox) return;
+
+  // Auto-add current selection if no pairs
+  if (!bodyPairs.length) {
+    const severity = Number((document.getElementById("bodySeverity") || {}).value || 3);
+    const duration = (document.getElementById("bodyDuration") || {}).value || "";
+    bodyPairs.push({ region: bodySelectedRegion, symptom: bodySelectedSymptom, severity, duration });
+    renderBodyPairs();
+  }
+
+  btn.disabled = true;
+  btn.textContent = currentLang === "zh" ? "生成中…" : "Generating…";
+  if (status) status.textContent = currentLang === "zh" ? "正在调用模型，稍等…" : "Calling model, please wait…";
+  adviceBox.style.display = "none";
+
+  const payload = {
+    participant_code: bodyParticipantCode() || "local",
+    journal_text: (document.getElementById("bodyJournalText") || {}).value || (document.getElementById("journalText") || {}).value || "",
+    selected_regions: [...new Map(bodyPairs.map((p) => [p.region.id, { id: p.region.id, label: p.region.zh }])).values()],
+    symptoms: bodyPairs.map((p) => ({ region_id: p.region.id, label: p.symptom.zh, severity: p.severity, duration: p.duration })),
+    free_text: (document.getElementById("bodyFreeText") || {}).value || "",
+    include_recent_diaries: true,
+    recent_diary_limit: 5,
+  };
+
+  try {
+    const res = await fetch("/body-sensation/advice", {
+      method: "POST",
+      headers: { "Content-Type": "application/json; charset=utf-8" },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    renderBodyAdvice(data);
+    if (status) status.textContent = currentLang === "zh" ? "建议已生成 ✓" : "Advice ready ✓";
+  } catch (e) {
+    if (status) status.textContent = currentLang === "zh" ? "请求失败，请检查后端是否运行" : "Request failed. Is the server running?";
+  } finally {
+    btn.disabled = false;
+    btn.textContent = t("body.generate");
+  }
+}
+
+function renderBodyAdvice(data) {
+  const box = document.getElementById("bodyAdvice");
+  if (!box) return;
+  const advice = data.advice || {};
+  const links = data.possible_links || [];
+  const safety = data.safety || {};
+  box.innerHTML = `
+    <div class="advice-title">${advice.title || (currentLang === "zh" ? "建议" : "Advice")}</div>
+    <div class="advice-summary">${advice.summary || ""}</div>
+    ${advice.state_reading ? `<div style="padding:12px 14px;border-radius:10px;background:rgba(16,185,129,0.07);margin-bottom:12px;font-size:14px;line-height:1.7;">${advice.state_reading}</div>` : ""}
+    ${links.length ? `<div class="advice-section">
+      <h4>${currentLang === "zh" ? "身体-情绪线索" : "Body-Emotion Links"}</h4>
+      <ul>${links.map((x) => `<li><b>${x.label || x.type || ""}</b>：${x.description || ""}</li>`).join("")}</ul>
+    </div>` : ""}
+    ${advice.steps && advice.steps.length ? `<div class="advice-section">
+      <h4>${currentLang === "zh" ? "可尝试步骤" : "Steps to try"}</h4>
+      <ol>${advice.steps.map((s) => `<li>${s}</li>`).join("")}</ol>
+    </div>` : ""}
+    ${advice.reflection_prompt ? `<div class="advice-section">
+      <h4>${currentLang === "zh" ? "继续记录提示" : "Reflection prompt"}</h4>
+      <p style="font-size:14px;color:var(--muted);">${advice.reflection_prompt}</p>
+    </div>` : ""}
+    ${safety.risk_level === "high" && safety.red_flags && safety.red_flags.length ? `
+      <div style="border-radius:10px;background:var(--red-bg);padding:12px 14px;margin-top:10px;font-size:13px;color:var(--red);">
+        ⚠️ ${safety.red_flags.join("；")}
+      </div>` : ""}
+    <div class="advice-meta">${currentLang === "zh" ? "来源" : "Source"}: ${advice.source || "-"} | ${currentLang === "zh" ? "不构成医疗建议" : "Not medical advice"}</div>
+  `;
+  box.style.display = "block";
+  box.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+function initBodyTab() {
+  updateJournalDate();
+  renderBodyChips();
+  renderBodyPairs();
+
+  const addBtn = document.getElementById("bodyAddPair");
+  if (addBtn) addBtn.addEventListener("click", () => {
+    const severity = Number((document.getElementById("bodySeverity") || {}).value || 3);
+    const duration = (document.getElementById("bodyDuration") || {}).value || "";
+    bodyPairs.push({ region: bodySelectedRegion, symptom: bodySelectedSymptom, severity, duration });
+    renderBodyPairs();
+  });
+
+  const clearBtn = document.getElementById("bodyClearPairs");
+  if (clearBtn) clearBtn.addEventListener("click", () => { bodyPairs = []; renderBodyPairs(); });
+
+  const submitBtn = document.getElementById("bodySubmitBtn");
+  if (submitBtn) submitBtn.addEventListener("click", submitBodyAdvice);
+
+  const severityEl = document.getElementById("bodySeverity");
+  const severityLabel = document.getElementById("bodySeverityLabel");
+  if (severityEl && severityLabel) {
+    severityEl.addEventListener("input", () => { severityLabel.textContent = `${severityEl.value} / 5`; });
+  }
+
+  // Mirror journal text to body tab
+  const journalEl = document.getElementById("journalText");
+  const bodyJournalEl = document.getElementById("bodyJournalText");
+  if (journalEl && bodyJournalEl) {
+    journalEl.addEventListener("input", () => { bodyJournalEl.value = journalEl.value; });
+    bodyJournalEl.value = journalEl.value;
+  }
+
+  // Data tab danger clear
+  const clearEntriesData = document.getElementById("clearEntriesData");
+  if (clearEntriesData) clearEntriesData.addEventListener("click", () => clearAllRecords());
+}
+
+/* ============================================================
+   DATA TAB — Chart.js charts
+   ============================================================ */
+let emotionChartInst = null;
+let vaChartInst = null;
+
+function refreshDataCharts() {
+  renderEmotionChart();
+  renderVAChart();
+  renderDataSummary();
+}
+
+function renderEmotionChart() {
+  const canvas = document.getElementById("emotionChart");
+  const noData = document.getElementById("chartNoData");
+  if (!canvas) return;
+
+  if (!entries.length) {
+    canvas.style.display = "none";
+    if (noData) noData.style.display = "block";
+    return;
+  }
+  canvas.style.display = "block";
+  if (noData) noData.style.display = "none";
+
+  const counts = {};
+  entries.forEach((e) => { const l = e.label || "中性"; counts[l] = (counts[l] || 0) + 1; });
+  const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 12);
+
+  const COLORS = ["#F59E0B","#EF4444","#3B82F6","#10B981","#8B5CF6","#EC4899","#F97316","#06B6D4","#84CC16","#6366F1","#14B8A6","#F43F5E"];
+
+  if (emotionChartInst) emotionChartInst.destroy();
+  emotionChartInst = new Chart(canvas, {
+    type: "bar",
+    data: {
+      labels: sorted.map(([l]) => l),
+      datasets: [{
+        data: sorted.map(([, c]) => c),
+        backgroundColor: COLORS.slice(0, sorted.length),
+        borderRadius: 8,
+        borderSkipped: false,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: (ctx) => ` ${ctx.parsed.y} ${currentLang === "zh" ? "次" : "times"}` } },
+      },
+      scales: {
+        y: { beginAtZero: true, ticks: { stepSize: 1 }, grid: { color: "rgba(245,158,11,0.1)" } },
+        x: { grid: { display: false } },
+      },
+    },
+  });
+}
+
+function renderVAChart() {
+  const canvas = document.getElementById("vaChart");
+  const noData = document.getElementById("vaChartNoData");
+  if (!canvas) return;
+
+  const valid = entries.filter((e) => typeof e.valence === "number" && typeof e.arousal === "number");
+  if (!valid.length) {
+    canvas.style.display = "none";
+    if (noData) noData.style.display = "block";
+    return;
+  }
+  canvas.style.display = "block";
+  if (noData) noData.style.display = "none";
+
+  if (vaChartInst) vaChartInst.destroy();
+  vaChartInst = new Chart(canvas, {
+    type: "scatter",
+    data: {
+      datasets: [{
+        label: currentLang === "zh" ? "情绪坐标" : "Emotion points",
+        data: valid.map((e) => ({ x: e.valence || 0, y: e.arousal || 0, label: e.label })),
+        backgroundColor: valid.map((e) => e.color || "#F59E0B"),
+        pointRadius: 7,
+        pointHoverRadius: 10,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: (ctx) => ` ${ctx.raw.label || ""} (V:${ctx.raw.x.toFixed(2)}, A:${ctx.raw.y.toFixed(2)})` } },
+      },
+      scales: {
+        x: { min: -1, max: 1, title: { display: true, text: currentLang === "zh" ? "效价 (Valence)" : "Valence", color: "#78716C" }, grid: { color: "rgba(245,158,11,0.1)" } },
+        y: { min: -1, max: 1, title: { display: true, text: currentLang === "zh" ? "唤醒度 (Arousal)" : "Arousal", color: "#78716C" }, grid: { color: "rgba(59,130,246,0.1)" } },
+      },
+    },
+  });
+}
+
+function renderDataSummary() {
+  const box = document.getElementById("dataSummary");
+  if (!box) return;
+  if (!entries.length) {
+    box.textContent = currentLang === "zh" ? "暂无记录。" : "No entries yet.";
+    return;
+  }
+  const counts = {};
+  entries.forEach((e) => { const l = e.label || "中性"; counts[l] = (counts[l] || 0) + 1; });
+  const top = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 3);
+  const avgV = entries.reduce((s, e) => s + (e.valence || 0), 0) / entries.length;
+  const avgA = entries.reduce((s, e) => s + (e.arousal || 0), 0) / entries.length;
+  box.innerHTML = [
+    `${currentLang === "zh" ? "共" : "Total"} <b>${entries.length}</b> ${currentLang === "zh" ? "条记录" : "entries"}`,
+    `${currentLang === "zh" ? "平均效价" : "Avg Valence"}: <b>${avgV.toFixed(2)}</b>`,
+    `${currentLang === "zh" ? "平均唤醒度" : "Avg Arousal"}: <b>${avgA.toFixed(2)}</b>`,
+    `${currentLang === "zh" ? "最常见情绪" : "Top emotions"}:`,
+    ...top.map(([l, c]) => `&nbsp;&nbsp;${l} × ${c}`),
+  ].join("<br>");
+}
+
+// Refresh button
+document.addEventListener("DOMContentLoaded", () => {
+  const refreshBtn = document.getElementById("refreshCharts");
+  if (refreshBtn) refreshBtn.addEventListener("click", refreshDataCharts);
+});
 
 boot();

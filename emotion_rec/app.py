@@ -1,13 +1,13 @@
 import io
 import os
 import json
-import http.client
 import tempfile
+from datetime import date as date_cls, datetime, timedelta, timezone
 from pathlib import Path
 import numpy as np
 import torch
 import torch.nn as nn
-from fastapi import FastAPI, UploadFile, File, Form, Header, Query, HTTPException
+from fastapi import Response, FastAPI, UploadFile, File, Form, Header, Query, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -37,16 +37,47 @@ try:
         split_text_segments,
     )
     from emotion_rec.text_emotion import analyze_text_emotion
+    from emotion_rec import llm_client
+    from emotion_rec import gemini_client
     from emotion_rec.storage import (
         create_diary_entry,
+        create_user,
+        authenticate_user,
+        get_user_by_username,
+        get_user_by_id,
+        update_user_password,
+        update_user_display_name,
+        get_or_create_user_settings,
+        update_user_settings,
+        list_all_users,
+        user_to_dict,
         export_all_csv,
         export_all_data,
         export_participant_csv,
         export_participant_data,
+        delete_all_participant_data,
+        get_emotion_review_report,
+        get_formal_diary_by_date,
         get_or_create_participant,
+        get_review_overview,
+        get_review_overview_all,
         init_database,
+        list_records,
+        list_records_all,
+        list_diary_context,
         list_diary_entries,
         log_usage_event,
+        normalize_diary_date,
+        normalize_review_range,
+        review_period_type,
+        update_formal_diary_reflection,
+        upsert_emotion_review_report,
+        upsert_formal_diary_by_date,
+        get_or_create_echo_session,
+        save_echo_message,
+        list_echo_messages,
+        list_echo_sessions,
+        get_echo_context,
     )
 except ModuleNotFoundError:
     from va_mapper import (  # type: ignore
@@ -57,27 +88,117 @@ except ModuleNotFoundError:
         split_text_segments,
     )
     from text_emotion import analyze_text_emotion  # type: ignore
+    import llm_client  # type: ignore
+    import gemini_client  # type: ignore
     from storage import (  # type: ignore
         create_diary_entry,
+        create_user,
+        authenticate_user,
+        get_user_by_username,
+        get_user_by_id,
+        update_user_password,
+        update_user_display_name,
+        get_or_create_user_settings,
+        update_user_settings,
+        list_all_users,
+        user_to_dict,
         export_all_csv,
         export_all_data,
         export_participant_csv,
         export_participant_data,
+        delete_all_participant_data,
+        get_emotion_review_report,
+        get_formal_diary_by_date,
         get_or_create_participant,
+        get_review_overview,
+        get_review_overview_all,
         init_database,
+        list_records,
+        list_records_all,
+        list_diary_context,
         list_diary_entries,
         log_usage_event,
+        normalize_diary_date,
+        normalize_review_range,
+        review_period_type,
+        update_formal_diary_reflection,
+        upsert_emotion_review_report,
+        upsert_formal_diary_by_date,
+        get_or_create_echo_session,
+        save_echo_message,
+        list_echo_messages,
+        list_echo_sessions,
+        get_echo_context,
     )
 
 # -----------------------------
 # LLM Configuration
 # -----------------------------
-LLM_API_HOST = os.getenv("LLM_API_HOST", "api.chatanywhere.tech")
-LLM_API_KEY = os.getenv("LLM_API_KEY", "")
-LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o")
-LLM_TIMEOUT_SECONDS = float(os.getenv("LLM_TIMEOUT_SECONDS", "20"))
+# All LLM traffic goes through emotion_rec/llm_client.py, which uses the OpenAI
+# SDK pointed at DeepSeek. Configure via DEEPSEEK_API_KEY/DEEPSEEK_MODEL, or the
+# legacy LLM_API_KEY/LLM_MODEL aliases. Default model is deepseek-v4-flash.
+try:
+    LLM_TYPOGRAPHY_TEMPERATURE = float(os.getenv("LLM_TYPOGRAPHY_TEMPERATURE", "0.6"))
+except ValueError:
+    LLM_TYPOGRAPHY_TEMPERATURE = 0.6
 VAD_SOURCE_RANGE = os.getenv("VAD_SOURCE_RANGE", "zero_one")
 ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "")
+
+# -----------------------------
+# JWT Configuration
+# -----------------------------
+_jwt_secret = os.getenv("SECRET_KEY", "")
+if not _jwt_secret:
+    import secrets as _secrets
+    _jwt_secret = _secrets.token_urlsafe(32)
+    print("[auth] WARNING: SECRET_KEY not set, using random key. Tokens will not survive restarts.")
+_jwt_algorithm = "HS256"
+_jwt_expire_hours = 24
+
+
+def _create_access_token(user_dict: dict) -> str:
+    import jwt as _jwt
+    payload = {
+        "sub": user_dict["username"],
+        "role": user_dict.get("role", "user"),
+        "pid": user_dict.get("participant_id"),
+        "exp": datetime.now(timezone.utc) + timedelta(hours=_jwt_expire_hours),
+    }
+    return _jwt.encode(payload, _jwt_secret, algorithm=_jwt_algorithm)
+
+
+def _verify_token(token: str) -> dict | None:
+    import jwt as _jwt
+    try:
+        payload = _jwt.decode(token, _jwt_secret, algorithms=[_jwt_algorithm])
+        return payload
+    except Exception:
+        return None
+
+
+def _get_optional_user(authorization: str | None = Header(default=None, alias="Authorization")) -> dict | None:
+    if not authorization:
+        return None
+    token = authorization.replace("Bearer ", "").strip() if authorization.startswith("Bearer ") else authorization.strip()
+    payload = _verify_token(token)
+    if not payload:
+        return None
+    return get_user_by_username(payload.get("sub", ""))
+
+
+def _get_required_user(authorization: str | None = Header(default=None, alias="Authorization")) -> dict:
+    if not authorization:
+        raise HTTPException(status_code=401, detail="未登录。")
+    token = authorization.replace("Bearer ", "").strip() if authorization.startswith("Bearer ") else authorization.strip()
+    payload = _verify_token(token)
+    if not payload:
+        raise HTTPException(status_code=401, detail="登录已过期，请重新登录。")
+    user = get_user_by_username(payload.get("sub", ""))
+    if not user:
+        raise HTTPException(status_code=401, detail="用户不存在。")
+    if not user.get("is_active", True):
+        raise HTTPException(status_code=403, detail="账号已停用。")
+    return user
 
 # -----------------------------
 # Model definition
@@ -139,6 +260,73 @@ if SHARED_DIR.exists():
 async def index():
     return FileResponse(STATIC_DIR / "index.html")
 
+
+@app.head("/", include_in_schema=False)
+async def index_head():
+    return Response(status_code=200, media_type="text/html")
+
+
+@app.get("/diary", include_in_schema=False)
+async def diary_page():
+    return FileResponse(STATIC_DIR / "diary.html")
+
+
+@app.head("/diary", include_in_schema=False)
+async def diary_page_head():
+    return Response(status_code=200, media_type="text/html")
+
+
+@app.get("/review", include_in_schema=False)
+async def review_page():
+    return FileResponse(STATIC_DIR / "review.html")
+
+
+@app.head("/review", include_in_schema=False)
+async def review_page_head():
+    return Response(status_code=200, media_type="text/html")
+
+
+@app.get("/records", include_in_schema=False)
+@app.get("/history", include_in_schema=False)
+async def records_page():
+    return FileResponse(STATIC_DIR / "records.html")
+
+
+@app.head("/records", include_in_schema=False)
+@app.head("/history", include_in_schema=False)
+async def records_page_head():
+    return Response(status_code=200, media_type="text/html")
+
+
+@app.get("/essay", include_in_schema=False)
+async def essay_page():
+    return FileResponse(STATIC_DIR / "essay.html")
+
+
+@app.head("/essay", include_in_schema=False)
+async def essay_page_head():
+    return Response(status_code=200, media_type="text/html")
+
+
+@app.get("/historyreview", include_in_schema=False)
+async def historyreview_page():
+    return FileResponse(STATIC_DIR / "historyreview.html")
+
+
+@app.head("/historyreview", include_in_schema=False)
+async def historyreview_page_head():
+    return Response(status_code=200, media_type="text/html")
+
+
+@app.get("/emo-echo", include_in_schema=False)
+async def emo_echo_page():
+    return FileResponse(STATIC_DIR / "emo_echo.html")
+
+
+@app.head("/emo-echo", include_in_schema=False)
+async def emo_echo_page_head():
+    return Response(status_code=200, media_type="text/html")
+
 # -----------------------------
 # Globals
 # -----------------------------
@@ -157,6 +345,31 @@ model = None
 class TextAnalysisRequest(BaseModel):
     text: str = Field(default="", max_length=6000)
     intensity: float = Field(default=0.8, ge=0.0, le=1.0)
+
+
+class RegisterRequest(BaseModel):
+    username: str = Field(min_length=2, max_length=64)
+    password: str = Field(min_length=4, max_length=128)
+    display_name: str | None = Field(default=None, max_length=128)
+
+
+class LoginRequest(BaseModel):
+    username: str = Field(min_length=2, max_length=64)
+    password: str = Field(min_length=4, max_length=128)
+
+
+class PasswordChangeRequest(BaseModel):
+    current_password: str = Field(min_length=4, max_length=128)
+    new_password: str = Field(min_length=4, max_length=128)
+
+
+class ProfileUpdateRequest(BaseModel):
+    display_name: str | None = Field(default=None, max_length=128)
+
+
+class SettingsUpdateRequest(BaseModel):
+    language: str | None = Field(default=None, max_length=8)
+    theme: str | None = Field(default=None, max_length=32)
 
 
 class ParticipantSessionRequest(BaseModel):
@@ -186,6 +399,29 @@ class UsageEventRequest(BaseModel):
     metadata_json: dict = Field(default_factory=dict)
 
 
+class FormalDiaryUpsertRequest(BaseModel):
+    participant_code: str | None = Field(default=None, min_length=2, max_length=64)
+    title: str = Field(default="", max_length=240)
+    content: str = Field(default="", max_length=50000)
+    physical_weather: str = Field(default="sunny", max_length=16)
+    mood_weather: str = Field(default="sunny", max_length=16)
+    source_entry_ids_json: list = Field(default_factory=list)
+    save_type: str = Field(default="autosave", max_length=20)
+    auto_analyze: bool = False
+    is_draft: bool | None = None
+
+
+class DiaryReflectRequest(BaseModel):
+    participant_code: str | None = Field(default=None, min_length=2, max_length=64)
+    image_analyses: list[dict] = Field(default_factory=list)
+
+
+class ReviewReflectRequest(BaseModel):
+    participant_code: str | None = Field(default=None, min_length=2, max_length=64)
+    start_date: str = Field(..., max_length=10)
+    end_date: str = Field(..., max_length=10)
+
+
 @app.on_event("startup")
 def _load():
     global processor, model
@@ -213,21 +449,109 @@ def healthz():
         "model_loaded": processor is not None and model is not None,
     }
 
+
+# -----------------------------
+# Auth Page Routes
+# -----------------------------
+
+@app.get("/login", include_in_schema=False)
+async def login_page():
+    return FileResponse(STATIC_DIR / "login.html")
+
+
+@app.get("/profile", include_in_schema=False)
+async def profile_page():
+    return FileResponse(STATIC_DIR / "profile.html")
+
+
+# -----------------------------
+# Auth API Endpoints
+# -----------------------------
+
+@app.post("/api/auth/register")
+def api_register(req: RegisterRequest):
+    try:
+        user = create_user(
+            username=req.username,
+            password=req.password,
+            display_name=req.display_name,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    token = _create_access_token(user)
+    return {"access_token": token, "token_type": "bearer", "user": user}
+
+
+@app.post("/api/auth/login")
+def api_login(req: LoginRequest):
+    user = authenticate_user(req.username, req.password)
+    if not user:
+        raise HTTPException(status_code=401, detail="用户名或密码不正确。")
+    token = _create_access_token(user)
+    return {"access_token": token, "token_type": "bearer", "user": user}
+
+
+@app.get("/api/auth/me")
+def api_get_me(user: dict = Depends(_get_required_user)):
+    settings = get_or_create_user_settings(user["id"])
+    return {**user, "settings": settings}
+
+
+@app.put("/api/auth/me")
+def api_update_me(req: ProfileUpdateRequest, user: dict = Depends(_get_required_user)):
+    if req.display_name is not None:
+        user = update_user_display_name(user["id"], req.display_name)
+    return user
+
+
+@app.put("/api/auth/me/password")
+def api_change_password(req: PasswordChangeRequest, user: dict = Depends(_get_required_user)):
+    try:
+        user = update_user_password(user["id"], req.current_password, req.new_password)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"message": "密码修改成功。", "user": user}
+
+
+@app.get("/api/auth/me/settings")
+def api_get_settings(user: dict = Depends(_get_required_user)):
+    return get_or_create_user_settings(user["id"])
+
+
+@app.put("/api/auth/me/settings")
+def api_update_settings(req: SettingsUpdateRequest, user: dict = Depends(_get_required_user)):
+    kwargs = {}
+    if req.language is not None:
+        kwargs["language"] = req.language
+    if req.theme is not None:
+        kwargs["theme"] = req.theme
+    return update_user_settings(user["id"], **kwargs)
+
+
+@app.get("/api/admin/users")
+def api_admin_list_users(user: dict = Depends(_get_required_user)):
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="需要管理员权限。")
+    return {"users": list_all_users()}
+
+
+@app.get("/api/admin/users/{username}")
+def api_admin_get_user(username: str, user: dict = Depends(_get_required_user)):
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="需要管理员权限。")
+    target = get_user_by_username(username)
+    if not target:
+        raise HTTPException(status_code=404, detail="用户不存在。")
+    settings = get_or_create_user_settings(target["id"])
+    return {**target, "settings": settings}
+
 # -----------------------------
 # Helper Functions
 # -----------------------------
 
 
-def _llm_headers():
-    token = LLM_API_KEY.strip()
-    if not token:
-        return None
-    if not token.lower().startswith("bearer "):
-        token = f"Bearer {token}"
-    return {
-        "Authorization": token,
-        "Content-Type": "application/json",
-    }
+def _strip_llm_content(content: str) -> str:
+    return llm_client.strip_content(content)
 
 
 def _style_for_va_mapping(va_mapping: dict):
@@ -301,6 +625,539 @@ def infer_text_emotion(text: str):
         "text_emotion": text_emotion,
         "va_mapping": va_mapping,
     }
+
+
+DIARY_WEATHER_VALUES = {"sunny", "cloudy", "overcast", "rainy", "stormy", "snowy", "windy", "foggy"}
+DIARY_WEATHER_LABELS = {
+    "sunny": "晴朗",
+    "cloudy": "多云",
+    "overcast": "阴天",
+    "rainy": "下雨",
+    "stormy": "暴风雨",
+    "snowy": "下雪",
+    "windy": "有风",
+    "foggy": "有雾",
+}
+DIARY_ANALYSIS_VERSION = "diary-reflection-v1"
+
+
+def _diary_participant_code(participant_code: str | None) -> str:
+    return (participant_code or "local").strip() or "local"
+
+
+def _resolve_code(user: dict | None, participant_code: str | None) -> str:
+    """Resolve participant_code with optional JWT auth.
+
+    - If user is logged in as admin: allow any participant_code (can view others' data).
+    - If user is logged in as regular user: force their own participant_code (security).
+    - If no user (legacy mode): use provided participant_code as-is.
+    """
+    if user is not None:
+        user_code = user.get("username", "local")
+        if user.get("role") == "admin":
+            # Admin can specify any participant_code
+            return (participant_code or user_code).strip() or user_code
+        # Regular user: force their own code
+        return user_code
+    return (participant_code or "local").strip() or "local"
+
+
+def _validate_diary_weather(value: str, field_name: str) -> str:
+    weather = str(value or "sunny").strip().lower()
+    if weather not in DIARY_WEATHER_VALUES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"{field_name} must be one of: {', '.join(sorted(DIARY_WEATHER_VALUES))}.",
+        )
+    return weather
+
+
+def _diary_color_name(va_mapping: dict) -> str:
+    names = {
+        "high_positive": "明亮暖色",
+        "low_positive": "柔和浅绿",
+        "high_negative": "红紫高能量",
+        "low_negative": "蓝灰低能量",
+        "neutral": "雾灰中性",
+    }
+    return names.get(va_mapping.get("quadrant"), names["neutral"])
+
+
+def _json_from_llm_content(content: str) -> dict | None:
+    content = _strip_llm_content(content)
+    try:
+        parsed = json.loads(content)
+        return parsed if isinstance(parsed, dict) else None
+    except Exception:
+        pass
+
+    match = re.search(r"\{.*\}", content, flags=re.DOTALL)
+    if not match:
+        return None
+    try:
+        parsed = json.loads(match.group(0))
+        return parsed if isinstance(parsed, dict) else None
+    except Exception:
+        return None
+
+
+def _safe_list(value, limit: int = 8) -> list:
+    def normalize_item(item):
+        if isinstance(item, dict):
+            item = (
+                item.get("label")
+                or item.get("name")
+                or item.get("emotion")
+                or item.get("question")
+                or item.get("text")
+                or item.get("summary")
+            )
+        text_value = str(item or "").strip()
+        return text_value or None
+
+    if isinstance(value, list):
+        normalized = [normalize_item(item) for item in value]
+        return [item for item in normalized if item][:limit]
+    if isinstance(value, str) and value.strip():
+        return [value.strip()]
+    return []
+
+
+def _diary_body_signals(text: str, text_emotion: dict, raw_signals=None) -> list[str]:
+    signals = [str(item).strip() for item in _safe_list(raw_signals, 8) if str(item).strip()]
+    seen = set(signals)
+    body_terms = [
+        "胸口", "心慌", "心跳", "喉咙", "胃", "肚子", "头疼", "头痛", "头晕",
+        "肩颈", "紧绷", "疲惫", "乏力", "睡不着", "出汗", "手抖", "呼吸",
+    ]
+    for term in body_terms:
+        if term in text and term not in seen:
+            seen.add(term)
+            signals.append(term)
+    for segment in text_emotion.get("segments", []) if isinstance(text_emotion, dict) else []:
+        for evidence in segment.get("evidence", []) or []:
+            evidence_text = str(evidence)
+            if "身体" in evidence_text and evidence_text not in seen:
+                seen.add(evidence_text)
+                signals.append(evidence_text)
+    return signals[:8]
+
+
+def _diary_text_preview(text: str, fallback: str = "今天的日记内容还不多。") -> str:
+    clean = re.sub(r"\s+", " ", str(text or "")).strip()
+    if not clean:
+        return fallback
+    first = re.split(r"[。！？!?\n]", clean, maxsplit=1)[0].strip() or clean
+    return first[:180] + ("..." if len(first) > 180 else "")
+
+
+def _build_diary_emotion_context(content: str) -> dict:
+    text_emotion = analyze_text_emotion(content)
+    va_mapping = map_segments(text_emotion.get("segments", []))
+    overall = va_mapping.get("overall") or map_va(0.0, 0.0, 0.0)
+    candidate_emotions = [
+        item.get("label")
+        for item in overall.get("candidates", [])
+        if isinstance(item, dict) and item.get("label")
+    ]
+    return {
+        "text_emotion": text_emotion,
+        "va_mapping": va_mapping,
+        "overall": overall,
+        "primary_emotion": overall.get("label", "中性"),
+        "candidate_emotions": candidate_emotions[:8],
+        "valence": float(overall.get("valence", 0.0)),
+        "arousal": float(overall.get("arousal", 0.0)),
+        "confidence": float(overall.get("confidence", 0.0)),
+        "emotion_color": overall.get("color", "#94A3B8"),
+        "emotion_color_name": _diary_color_name(overall),
+    }
+
+
+def _filter_diary_context_for_sources(context_items: list[dict], source_ids: list) -> list[dict]:
+    if not source_ids:
+        return context_items
+    selected = {str(item) for item in source_ids}
+    filtered = []
+    for item in context_items:
+        key = f"{item.get('source')}:{item.get('id')}"
+        if key in selected or str(item.get("id")) in selected:
+            filtered.append(item)
+    return filtered or context_items
+
+
+def _fallback_diary_reflection(diary: dict, emotion_context: dict, context_items: list[dict]) -> dict:
+    overall = emotion_context.get("overall", {})
+    primary = emotion_context.get("primary_emotion") or overall.get("label") or "中性"
+    candidates = [label for label in emotion_context.get("candidate_emotions", []) if label and label != primary]
+    physical = diary.get("physical_weather") or "sunny"
+    mood = diary.get("mood_weather") or "sunny"
+    physical_label = DIARY_WEATHER_LABELS.get(physical, physical)
+    mood_label = DIARY_WEATHER_LABELS.get(mood, mood)
+    context_hint = ""
+    if context_items:
+        context_hint = f" 今天还参考了 {len(context_items)} 条随手记或身体感受素材。"
+
+    return {
+        "event_summary": _diary_text_preview(diary.get("content", "")),
+        "gentle_reflection": (
+            f"看起来，今天更靠近“{primary}”这类感受。{context_hint}"
+            "这里的复盘只是帮你把线索放在一起看，不急着给它下结论。"
+        ),
+        "primary_emotion": primary,
+        "secondary_emotions": candidates[:4],
+        "fine_grained_emotions": candidates[:5],
+        "body_signals": _diary_body_signals(diary.get("content", ""), emotion_context.get("text_emotion", {})),
+        "valence": float(emotion_context.get("valence", 0.0)),
+        "arousal": float(emotion_context.get("arousal", 0.0)),
+        "emotion_color": emotion_context.get("emotion_color") or overall.get("color") or "#94A3B8",
+        "emotion_color_name": emotion_context.get("emotion_color_name") or _diary_color_name(overall),
+        "weather_reflection": (
+            f"现实天气是{physical_label}，心情天气是{mood_label}。天气可以作为背景被看见，"
+            "但不需要把今天的情绪强行归因到天气上。"
+        ),
+        "possible_trigger": "可能和今天反复出现的事件、关系、任务或身体消耗有关；还需要你自己的感受来确认。",
+        "possible_need": "也许需要一点停顿、被理解，或把今天最耗力的部分从脑子里放下来。",
+        "reflection_questions": [
+            "今天哪一刻最明显地改变了你的情绪天气？",
+            "有没有一个感受，是你写完以后才发现它一直在？",
+            "如果只保留一个小需求，它会是什么？",
+        ],
+        "small_action_suggestion": "可以先离开屏幕两分钟，喝一点水，把今天最重的一件事用一句话写在旁边。",
+    }
+
+
+def _normalize_diary_reflection(raw: dict | None, diary: dict, emotion_context: dict, context_items: list[dict]) -> dict:
+    fallback = _fallback_diary_reflection(diary, emotion_context, context_items)
+    raw = raw if isinstance(raw, dict) else {}
+    result = dict(fallback)
+    for key in (
+        "event_summary", "gentle_reflection", "weather_reflection", "possible_trigger",
+        "possible_need", "small_action_suggestion",
+    ):
+        value = raw.get(key)
+        if isinstance(value, str) and value.strip():
+            result[key] = value.strip()
+
+    for key in ("secondary_emotions", "fine_grained_emotions", "reflection_questions"):
+        values = _safe_list(raw.get(key), 8)
+        if values:
+            result[key] = values
+
+    body_signals = _diary_body_signals(diary.get("content", ""), emotion_context.get("text_emotion", {}), raw.get("body_signals"))
+    if body_signals:
+        result["body_signals"] = body_signals
+
+    overall = emotion_context.get("overall", {})
+    result["primary_emotion"] = emotion_context.get("primary_emotion") or overall.get("label") or result["primary_emotion"]
+    result["valence"] = float(emotion_context.get("valence", overall.get("valence", 0.0)))
+    result["arousal"] = float(emotion_context.get("arousal", overall.get("arousal", 0.0)))
+    result["emotion_color"] = emotion_context.get("emotion_color") or overall.get("color") or "#94A3B8"
+    result["emotion_color_name"] = emotion_context.get("emotion_color_name") or _diary_color_name(overall)
+    return result
+
+
+def _call_diary_reflection_llm(diary: dict, emotion_context: dict, context_items: list[dict], image_analyses: list[dict] | None = None) -> dict | None:
+    if not llm_client.llm_enabled():
+        return None
+
+    model_name = os.getenv("DIARY_REFLECTION_LLM_MODEL", "").strip() or None
+    try:
+        temperature = float(os.getenv("DIARY_REFLECTION_LLM_TEMPERATURE", "0.18"))
+    except ValueError:
+        temperature = 0.18
+    try:
+        max_tokens = int(os.getenv("DIARY_REFLECTION_LLM_MAX_TOKENS", "4096"))
+    except ValueError:
+        max_tokens = 4096
+
+    system_prompt = """你是 EmoBridge 的正式日记复盘助手，不是诊断系统。
+你的任务是基于用户写完的一天日记、当天可参考的随手记/身体感受素材、现实天气和心情天气，生成温柔、克制、结构化的复盘。
+
+规则：
+- 只输出合法 JSON，不要 Markdown，不要 <think>。
+- 不要使用诊断式语言，不要说“你就是焦虑/抑郁/有问题”。
+- 多使用“可能”“看起来”“也许”“更像是”。
+- 不要强行解释用户，也不要强行把情绪归因于天气。
+- 天气只能作为背景线索，不能被写成情绪原因。
+- valence、arousal、primary_emotion 已由系统的文本情绪识别给出，你可以参考，但不要另写一套分类逻辑。
+- emotion_color 由系统代码统一映射；如果你输出颜色，后端也会用系统颜色覆盖。
+
+必须输出这些顶层字段：
+event_summary, gentle_reflection, primary_emotion, secondary_emotions, fine_grained_emotions, body_signals, valence, arousal, emotion_color, emotion_color_name, weather_reflection, possible_trigger, possible_need, reflection_questions, small_action_suggestion。"""
+
+    user_payload = {
+        "diary": {
+            "date": diary.get("diary_date"),
+            "title": diary.get("title"),
+            "content": diary.get("content"),
+            "physical_weather": diary.get("physical_weather"),
+            "physical_weather_label": DIARY_WEATHER_LABELS.get(diary.get("physical_weather"), diary.get("physical_weather")),
+            "mood_weather": diary.get("mood_weather"),
+            "mood_weather_label": DIARY_WEATHER_LABELS.get(diary.get("mood_weather"), diary.get("mood_weather")),
+        },
+        "emotion_context_from_system": {
+            "valence": emotion_context.get("valence"),
+            "arousal": emotion_context.get("arousal"),
+            "primary_emotion": emotion_context.get("primary_emotion"),
+            "candidate_emotions": emotion_context.get("candidate_emotions"),
+            "confidence": emotion_context.get("confidence"),
+            "emotion_color": emotion_context.get("emotion_color"),
+            "emotion_color_name": emotion_context.get("emotion_color_name"),
+        },
+        "context_records": context_items[:12],
+        "image_analyses": [
+            {
+                "primary_emotion": img.get("primary_emotion", ""),
+                "evoked_emotion": img.get("evoked_emotion", ""),
+                "expressed_emotion": img.get("expressed_emotion", ""),
+                "description": img.get("description", ""),
+                "valence": img.get("valence", 0.0),
+                "arousal": img.get("arousal", 0.0),
+                "reflection": img.get("reflection", ""),
+            }
+            for img in (image_analyses or [])[:4]
+        ] or None,
+        "output_schema": {
+            "event_summary": "string",
+            "gentle_reflection": "string",
+            "primary_emotion": "string",
+            "secondary_emotions": [],
+            "fine_grained_emotions": [],
+            "body_signals": [],
+            "valence": -0.5,
+            "arousal": 0.7,
+            "emotion_color": "#xxxxxx",
+            "emotion_color_name": "string",
+            "weather_reflection": "string",
+            "possible_trigger": "string",
+            "possible_need": "string",
+            "reflection_questions": [],
+            "small_action_suggestion": "string",
+        },
+    }
+
+    try:
+        parsed = llm_client.chat_json(
+            [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": json.dumps(user_payload, ensure_ascii=False)},
+            ],
+            model=model_name,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+        return parsed if isinstance(parsed, dict) else None
+    except Exception as error:
+        print(f"[diary] reflection LLM skipped: {error}")
+        return None
+
+
+REVIEW_ANALYSIS_VERSION = "emotion-review-v1"
+
+
+def _review_default_dates() -> tuple[str, str]:
+    end = date_cls.today()
+    start = end - timedelta(days=6)
+    return start.isoformat(), end.isoformat()
+
+
+def _review_participant_code(participant_code: str | None) -> str:
+    return _diary_participant_code(participant_code)
+
+
+def _review_soften_text(text: str) -> str:
+    softened = str(text or "")
+    replacements = {
+        "你就是焦虑": "你可能正在经历一些不安和紧绷",
+        "你就是抑郁": "这段时间看起来可能有些低落",
+        "你很焦虑": "你可能有些不安",
+        "你很抑郁": "你可能有些低落",
+        "你有焦虑症": "你可能有一些持续的不安感",
+        "你有抑郁症": "你可能有一些持续的低落感",
+        "焦虑症": "不安感",
+        "抑郁症": "持续低落感",
+    }
+    for source, target in replacements.items():
+        softened = softened.replace(source, target)
+    return softened.strip()
+
+
+def _review_soften_json(value):
+    if isinstance(value, dict):
+        return {key: _review_soften_json(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_review_soften_json(item) for item in value]
+    if isinstance(value, str):
+        return _review_soften_text(value)
+    return value
+
+
+def _review_named_notes(value, fallback_labels: list[dict] | None = None, limit: int = 6) -> list[dict]:
+    notes = []
+    if isinstance(value, list):
+        for item in value:
+            if isinstance(item, dict):
+                label = str(item.get("label") or item.get("emotion") or item.get("name") or "").strip()
+                note = str(item.get("note") or item.get("summary") or item.get("description") or "").strip()
+            else:
+                label = str(item or "").strip()
+                note = ""
+            if label:
+                notes.append({"label": label, "note": _review_soften_text(note)})
+            if len(notes) >= limit:
+                break
+    if notes:
+        return notes
+    return (fallback_labels or [])[:limit]
+
+
+def _fallback_review_reflection(stats: dict) -> dict:
+    total = int(stats.get("total_records") or 0)
+    top_primary = (stats.get("primary_emotions") or [])[:3]
+    top_fine = (stats.get("fine_emotions") or [])[:5]
+    top_triggers = (stats.get("triggers") or [])[:5]
+    top_body = (stats.get("body_signals") or [])[:5]
+    top_colors = (stats.get("colors") or [])[:4]
+    primary_text = "、".join(item.get("label", "") for item in top_primary if item.get("label")) or "尚不明显的情绪"
+    trigger_text = "、".join(item.get("label", "") for item in top_triggers if item.get("label")) or "日常事件和身体状态"
+    body_text = "、".join(item.get("label", "") for item in top_body if item.get("label")) or "暂时不明显"
+
+    return {
+        "period_summary": (
+            f"{stats.get('start_date')} 到 {stats.get('end_date')} 之间共整理到 {total} 条记录。"
+            f"看起来，这段时间较常出现的情绪线索包括“{primary_text}”。"
+        ),
+        "emotional_pattern": (
+            "这些结果更像是一组阶段性线索，而不是定论。"
+            "你可以先观察哪些情绪反复出现、哪些日子能量更高或更低。"
+        ),
+        "color_story": (
+            "颜色色板显示了这段时间情绪落点的分布。"
+            + (f"较常出现的颜色有 {len(top_colors)} 种，可以把它们当作情绪天气的提示。" if top_colors else "目前颜色样本还不多。")
+        ),
+        "main_emotions": [
+            {
+                "label": item.get("label"),
+                "note": f"出现 {item.get('count')} 次，可能是这段时间较容易被记录下来的感受。",
+            }
+            for item in top_primary
+        ],
+        "fine_grained_emotions": [item.get("label") for item in top_fine if item.get("label")],
+        "possible_triggers": [
+            f"{item.get('label')}：可能和这段时间反复出现的事件或背景有关。"
+            for item in top_triggers
+        ] or [f"可能和{trigger_text}有关，但还需要结合你自己的感受确认。"],
+        "body_signal_summary": f"身体信号里较常被看见的是：{body_text}。这些只是身体线索，不等同于医学判断。",
+        "gentle_observations": [
+            "看起来，把随手记、正式日记和身体感受放在一起后，情绪变化会比单条记录更容易被看见。",
+            "也许可以留意：哪些事件之后 V-A 坐标更容易偏向高能量，哪些时段更容易变低。",
+        ],
+        "reflection_questions": [
+            "这段时间哪一天的情绪转折最明显？",
+            "有没有一种感受，其实是通过身体信号先出现的？",
+            "如果只照顾一个最常出现的需求，它可能是什么？",
+        ],
+        "small_steps": [
+            "选一条最有代表性的记录，补一句当时真正需要什么。",
+            "给高能量或低能量的日子各标一个关键词，看看它们是否有共同背景。",
+        ],
+        "non_diagnostic_note": "这份复盘只是帮助整理线索，不用于诊断，也不能替代专业支持。",
+    }
+
+
+def _normalize_review_reflection(raw: dict | None, stats: dict) -> dict:
+    fallback = _fallback_review_reflection(stats)
+    raw = _review_soften_json(raw if isinstance(raw, dict) else {})
+    result = dict(fallback)
+
+    for key in (
+        "period_summary",
+        "emotional_pattern",
+        "color_story",
+        "body_signal_summary",
+        "non_diagnostic_note",
+    ):
+        value = raw.get(key)
+        if isinstance(value, str) and value.strip():
+            result[key] = _review_soften_text(value)
+
+    result["main_emotions"] = _review_named_notes(raw.get("main_emotions"), fallback["main_emotions"], 6)
+
+    for key in (
+        "fine_grained_emotions",
+        "possible_triggers",
+        "gentle_observations",
+        "reflection_questions",
+        "small_steps",
+    ):
+        values = _safe_list(raw.get(key), 8)
+        if values:
+            result[key] = [_review_soften_text(item) for item in values]
+
+    return _review_soften_json(result)
+
+
+def _call_review_reflection_llm(stats: dict) -> dict | None:
+    if not llm_client.llm_enabled():
+        return None
+
+    model_name = os.getenv("REVIEW_REFLECTION_LLM_MODEL", "").strip() or None
+    try:
+        temperature = float(os.getenv("REVIEW_REFLECTION_LLM_TEMPERATURE", "0.2"))
+    except ValueError:
+        temperature = 0.2
+    try:
+        max_tokens = int(os.getenv("REVIEW_REFLECTION_LLM_MAX_TOKENS", "4096"))
+    except ValueError:
+        max_tokens = 4096
+
+    system_prompt = """你是 EmoBridge 的阶段性情绪复盘助手，不是诊断系统。
+你的任务是基于一段日期范围内的随手记、正式日记、身体感受、V-A 坐标和情绪颜色，生成温柔、克制、结构化的阶段性复盘。
+
+规则：
+- 只输出合法 JSON，不要 Markdown，不要 <think>。
+- 不要使用诊断式语言，不要说“你就是焦虑/抑郁/有问题”。
+- 多使用“可能”“看起来”“也许”“更像是”。
+- 不要把统计相关写成因果定论。
+- 身体信号只能作为线索，不能写成医学判断。
+- 不要建议用户停止用药、不要做医疗诊断。
+
+必须输出这些顶层字段：
+period_summary, emotional_pattern, color_story, main_emotions, fine_grained_emotions, possible_triggers, body_signal_summary, gentle_observations, reflection_questions, small_steps, non_diagnostic_note。
+
+main_emotions 必须是对象数组，每个对象包含 label 和 note。其余列表字段输出字符串数组。"""
+
+    compact_stats = {
+        "participant_code": stats.get("participant_code"),
+        "start_date": stats.get("start_date"),
+        "end_date": stats.get("end_date"),
+        "total_records": stats.get("total_records"),
+        "source_counts": stats.get("source_counts"),
+        "averages": stats.get("averages"),
+        "days": stats.get("days"),
+        "colors": stats.get("colors", [])[:12],
+        "primary_emotions": stats.get("primary_emotions", [])[:12],
+        "fine_emotions": stats.get("fine_emotions", [])[:16],
+        "triggers": stats.get("triggers", [])[:12],
+        "body_signals": stats.get("body_signals", [])[:12],
+        "records": stats.get("records", [])[-60:],
+    }
+
+    try:
+        parsed = llm_client.chat_json(
+            [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": json.dumps(compact_stats, ensure_ascii=False)},
+            ],
+            model=model_name,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+        return parsed if isinstance(parsed, dict) else None
+    except Exception as error:
+        print(f"[review] reflection LLM skipped: {error}")
+        return None
 
 
 def normalize_design_for_mapping(design: dict, va_mapping: dict):
@@ -558,46 +1415,29 @@ def call_llm_typography_design(text: str, vad: dict, acoustics: dict):
     """
 
     try:
-        headers = _llm_headers()
-        if not headers:
+        if not llm_client.llm_enabled():
             return build_fallback_typography_design(text, vad, acoustics)
 
-        conn = http.client.HTTPSConnection(LLM_API_HOST, timeout=LLM_TIMEOUT_SECONDS)
-        payload = json.dumps({
-            "model": LLM_MODEL,
-            "messages": [
+        parsed_result = llm_client.chat_json(
+            [
                 {"role": "system", "content": "You are a Semantic Typography Expert. You trust the text's meaning over the audio's volume."},
-                {"role": "user", "content": prompt}
+                {"role": "user", "content": prompt},
             ],
-            # 🔥 0.75 温度，保证它敢于根据语义进行夸张设计
-            "temperature": 0.75, 
-            "response_format": { "type": "json_object" }
-        })
-        conn.request("POST", "/v1/chat/completions", payload, headers)
-        res = conn.getresponse()
-        data = res.read()
-        
-        response_json = json.loads(data.decode("utf-8"))
-        content = response_json['choices'][0]['message']['content']
-        
-        if "```" in content:
-            content = content.replace("```json", "").replace("```", "").strip()
-            
-        parsed_result = json.loads(content)
-        
+            temperature=0.75,
+            max_tokens=2048,
+        )
+
+        if not isinstance(parsed_result, dict):
+            return build_fallback_typography_design(text, vad, acoustics)
+
         if "design" in parsed_result:
             return parsed_result["design"]
-        else:
-            return parsed_result
+        return parsed_result
         
     except Exception as e:
         print(f"LLM Call Failed: {e}")
         return build_fallback_typography_design(text, vad, acoustics)
 
-
-import json
-import http.client
-import re
 
 def call_llm_typography_design_2(text: str, vad: dict, acoustics: dict):
     """
@@ -662,31 +1502,20 @@ def call_llm_typography_design_2(text: str, vad: dict, acoustics: dict):
     """
 
     try:
-        headers = _llm_headers()
-        if not headers:
+        if not llm_client.llm_enabled():
             return build_fallback_typography_design(text, vad, acoustics)
 
-        conn = http.client.HTTPSConnection(LLM_API_HOST, timeout=LLM_TIMEOUT_SECONDS)
-        payload = json.dumps({
-            "model": LLM_MODEL,
-            "messages": [
+        llm_output = llm_client.chat_json(
+            [
                 {"role": "system", "content": "You are a JSON-only Kinetic Typography generator."},
-                {"role": "user", "content": prompt}
+                {"role": "user", "content": prompt},
             ],
-            "temperature": 0.5, 
-            "response_format": { "type": "json_object" }
-        })
-        conn.request("POST", "/v1/chat/completions", payload, headers)
-        res = conn.getresponse()
-        data = res.read()
-        
-        response_json = json.loads(data.decode("utf-8"))
-        content = response_json['choices'][0]['message']['content']
-        
-        if "```" in content:
-            content = content.replace("```json", "").replace("```", "").strip()
-            
-        llm_output = json.loads(content)
+            temperature=LLM_TYPOGRAPHY_TEMPERATURE,
+            max_tokens=2048,
+        )
+
+        if not isinstance(llm_output, dict):
+            return build_fallback_typography_design(text, vad, acoustics)
         
         # --- PYTHON POST-PROCESSING (修复版) ---
         
@@ -805,57 +1634,104 @@ def _check_admin_token(admin_token: str | None, x_admin_token: str | None):
         raise HTTPException(status_code=403, detail="Invalid admin token.")
 
 
+def _check_api_admin_token(admin_token: str | None, x_admin_token: str | None):
+    token = admin_token or x_admin_token
+    if not ADMIN_TOKEN:
+        raise HTTPException(status_code=401, detail="ADMIN_TOKEN is not configured.")
+    if not token:
+        raise HTTPException(status_code=401, detail="Admin token is required.")
+    if token != ADMIN_TOKEN:
+        raise HTTPException(status_code=403, detail="Invalid admin token.")
+
+
 @app.post("/participants/session")
-async def participant_session(payload: ParticipantSessionRequest):
+async def participant_session(
+    payload: ParticipantSessionRequest,
+    user: dict | None = Depends(_get_optional_user),
+):
     try:
-        participant = get_or_create_participant(payload.participant_code, payload.consent_version)
-        log_usage_event(payload.participant_code, "session_start", {"consent_version": payload.consent_version})
+        code = _resolve_code(user, payload.participant_code)
+        participant = get_or_create_participant(code, payload.consent_version)
+        log_usage_event(code, "session_start", {"consent_version": payload.consent_version})
         return {"status": "success", "participant": participant}
     except Exception as error:
         raise _storage_error(error)
 
 
 @app.get("/participants/{participant_code}/diaries")
-async def participant_diaries(participant_code: str):
+async def participant_diaries(
+    participant_code: str,
+    user: dict | None = Depends(_get_optional_user),
+):
     try:
-        return {"status": "success", "diary_entries": list_diary_entries(participant_code)}
+        code = _resolve_code(user, participant_code)
+        return {"status": "success", "diary_entries": list_diary_entries(code)}
+    except Exception as error:
+        raise _storage_error(error)
+
+
+@app.delete("/participants/{participant_code}/all-data")
+async def clear_participant_all_data(
+    participant_code: str,
+    user: dict | None = Depends(_get_optional_user),
+):
+    try:
+        code = _resolve_code(user, participant_code)
+        result = delete_all_participant_data(code)
+        return {"status": "success", **result}
     except Exception as error:
         raise _storage_error(error)
 
 
 @app.post("/diaries")
-async def save_diary_entry(payload: DiaryEntryRequest):
+async def save_diary_entry(
+    payload: DiaryEntryRequest,
+    user: dict | None = Depends(_get_optional_user),
+):
     try:
         payload_data = payload.model_dump() if hasattr(payload, "model_dump") else payload.dict()
-        entry = create_diary_entry(payload.participant_code, payload_data)
+        code = _resolve_code(user, payload.participant_code)
+        entry = create_diary_entry(code, payload_data)
         return {"status": "success", "diary_entry": entry}
     except Exception as error:
         raise _storage_error(error)
 
 
 @app.post("/usage-events")
-async def save_usage_event(payload: UsageEventRequest):
+async def save_usage_event(
+    payload: UsageEventRequest,
+    user: dict | None = Depends(_get_optional_user),
+):
     try:
-        event = log_usage_event(payload.participant_code, payload.event_type, payload.metadata_json)
+        code = _resolve_code(user, payload.participant_code)
+        event = log_usage_event(code, payload.event_type, payload.metadata_json)
         return {"status": "success", "usage_event": event}
     except Exception as error:
         raise _storage_error(error)
 
 
 @app.get("/participants/{participant_code}/export.json")
-async def participant_export_json(participant_code: str):
+async def participant_export_json(
+    participant_code: str,
+    user: dict | None = Depends(_get_optional_user),
+):
     try:
-        log_usage_event(participant_code, "participant_export_json", {})
-        return export_participant_data(participant_code)
+        code = _resolve_code(user, participant_code)
+        log_usage_event(code, "participant_export_json", {})
+        return export_participant_data(code)
     except Exception as error:
         raise _storage_error(error)
 
 
 @app.get("/participants/{participant_code}/export.csv")
-async def participant_export_csv(participant_code: str):
+async def participant_export_csv(
+    participant_code: str,
+    user: dict | None = Depends(_get_optional_user),
+):
     try:
-        log_usage_event(participant_code, "participant_export_csv", {})
-        csv_text = export_participant_csv(participant_code)
+        code = _resolve_code(user, participant_code)
+        log_usage_event(code, "participant_export_csv", {})
+        csv_text = export_participant_csv(code)
         return Response(
             content=csv_text,
             media_type="text/csv; charset=utf-8",
@@ -887,6 +1763,280 @@ async def admin_export_csv(
     )
 
 
+
+@app.get("/api/diary")
+async def get_diary_by_date(
+    date: str = Query(..., description="Diary date in YYYY-MM-DD"),
+    participant_code: str | None = Query(default=None),
+    user: dict | None = Depends(_get_optional_user),
+):
+    try:
+        diary_date = normalize_diary_date(date)
+        code = _resolve_code(user, participant_code)
+        return {"status": "success", "diary": get_formal_diary_by_date(code, diary_date)}
+    except Exception as error:
+        raise _storage_error(error)
+
+
+@app.get("/api/diary/context")
+async def get_diary_context_by_date(
+    date: str = Query(..., description="Diary date in YYYY-MM-DD"),
+    participant_code: str | None = Query(default=None),
+    user: dict | None = Depends(_get_optional_user),
+):
+    try:
+        diary_date = normalize_diary_date(date)
+        code = _resolve_code(user, participant_code)
+        records = list_diary_context(code, diary_date)
+        return {"status": "success", "date": diary_date, "records": records}
+    except Exception as error:
+        raise _storage_error(error)
+
+
+@app.put("/api/diary/by-date/{diary_date}")
+async def put_diary_by_date(
+    diary_date: str,
+    payload: FormalDiaryUpsertRequest,
+    user: dict | None = Depends(_get_optional_user),
+):
+    try:
+        date_text = normalize_diary_date(diary_date)
+        payload_data = payload.model_dump() if hasattr(payload, "model_dump") else payload.dict()
+        payload_data["physical_weather"] = _validate_diary_weather(payload_data.get("physical_weather"), "physical_weather")
+        payload_data["mood_weather"] = _validate_diary_weather(payload_data.get("mood_weather"), "mood_weather")
+        raw_code = payload_data.pop("participant_code", None)
+        code = _resolve_code(user, raw_code)
+        diary = upsert_formal_diary_by_date(code, date_text, payload_data)
+        return {
+            "status": "success",
+            "save_type": payload_data.get("save_type", "autosave"),
+            "auto_analyze": False,
+            "diary": diary,
+        }
+    except HTTPException:
+        raise
+    except Exception as error:
+        raise _storage_error(error)
+
+
+@app.post("/api/diary/by-date/{diary_date}/reflect")
+async def reflect_diary_by_date(
+    diary_date: str,
+    payload: DiaryReflectRequest | None = None,
+    user: dict | None = Depends(_get_optional_user),
+):
+    try:
+        date_text = normalize_diary_date(diary_date)
+        code = _resolve_code(user, payload.participant_code if payload else None)
+        diary = get_formal_diary_by_date(code, date_text)
+        content = str(diary.get("content") or "")
+        if not content.strip():
+            raise HTTPException(status_code=400, detail="Diary content is empty.")
+        emotion_context = _build_diary_emotion_context(content)
+        context_items = list_diary_context(code, date_text)
+        context_items = _filter_diary_context_for_sources(context_items, diary.get("source_entry_ids_json") or [])
+        img_analyses = payload.image_analyses if payload else []
+        llm_reflection = _call_diary_reflection_llm(diary, emotion_context, context_items, img_analyses)
+        reflection = _normalize_diary_reflection(llm_reflection, diary, emotion_context, context_items)
+        saved_diary = update_formal_diary_reflection(
+            code,
+            date_text,
+            {
+                "valence": reflection["valence"],
+                "arousal": reflection["arousal"],
+                "primary_emotion": reflection["primary_emotion"],
+                "secondary_emotions_json": reflection.get("secondary_emotions", []),
+                "fine_emotions_json": reflection.get("fine_grained_emotions", []),
+                "body_signals_json": reflection.get("body_signals", []),
+                "emotion_color": reflection["emotion_color"],
+                "emotion_color_name": reflection["emotion_color_name"],
+                "reflection_json": reflection,
+                "analysis_version": DIARY_ANALYSIS_VERSION,
+                "is_draft": False,
+            },
+        )
+        return {
+            "status": "success",
+            "diary": saved_diary,
+            "reflection": reflection,
+            "text_emotion": emotion_context.get("text_emotion"),
+            "va_mapping": emotion_context.get("va_mapping"),
+            "context_records_used": context_items,
+            "llm_used": isinstance(llm_reflection, dict),
+        }
+    except HTTPException:
+        raise
+    except Exception as error:
+        raise _storage_error(error)
+
+
+@app.get("/api/review/overview")
+async def review_overview(
+    start_date: str | None = Query(default=None, description="Start date in YYYY-MM-DD"),
+    end_date: str | None = Query(default=None, description="End date in YYYY-MM-DD"),
+    participant_code: str | None = Query(default=None),
+    user: dict | None = Depends(_get_optional_user),
+):
+    try:
+        default_start, default_end = _review_default_dates()
+        start_text, end_text = normalize_review_range(start_date or default_start, end_date or default_end)
+        code = _resolve_code(user, participant_code)
+        stats = get_review_overview(code, start_text, end_text)
+        return {
+            "status": "success",
+            "participant_code": code,
+            "start_date": start_text,
+            "end_date": end_text,
+            "period_type": review_period_type(start_text, end_text),
+            "stats": stats,
+        }
+    except Exception as error:
+        raise _storage_error(error)
+
+
+@app.get("/api/review/report")
+async def review_report(
+    start_date: str | None = Query(default=None, description="Start date in YYYY-MM-DD"),
+    end_date: str | None = Query(default=None, description="End date in YYYY-MM-DD"),
+    participant_code: str | None = Query(default=None),
+    user: dict | None = Depends(_get_optional_user),
+):
+    try:
+        default_start, default_end = _review_default_dates()
+        start_text, end_text = normalize_review_range(start_date or default_start, end_date or default_end)
+        code = _resolve_code(user, participant_code)
+        report = get_emotion_review_report(
+            code,
+            start_text,
+            end_text,
+            review_period_type(start_text, end_text),
+        )
+        return {
+            "status": "success",
+            "participant_code": code,
+            "start_date": start_text,
+            "end_date": end_text,
+            "report": report,
+        }
+    except Exception as error:
+        raise _storage_error(error)
+
+
+@app.post("/api/review/reflect")
+async def review_reflect(
+    payload: ReviewReflectRequest,
+    user: dict | None = Depends(_get_optional_user),
+):
+    try:
+        payload_data = payload.model_dump() if hasattr(payload, "model_dump") else payload.dict()
+        start_text, end_text = normalize_review_range(payload_data.get("start_date"), payload_data.get("end_date"))
+        code = _resolve_code(user, payload_data.get("participant_code"))
+        period = review_period_type(start_text, end_text)
+        stats = get_review_overview(code, start_text, end_text)
+        llm_report = _call_review_reflection_llm(stats)
+        report_json = _normalize_review_reflection(llm_report, stats)
+        saved_report = upsert_emotion_review_report(
+            code,
+            start_text,
+            end_text,
+            period,
+            stats,
+            report_json,
+            REVIEW_ANALYSIS_VERSION,
+        )
+        return {
+            "status": "success",
+            "participant_code": code,
+            "start_date": start_text,
+            "end_date": end_text,
+            "period_type": period,
+            "stats": stats,
+            "report": saved_report,
+            "report_json": report_json,
+            "llm_used": isinstance(llm_report, dict),
+        }
+    except Exception as error:
+        raise _storage_error(error)
+
+
+@app.get("/api/records")
+async def records_api(
+    participant_code: str | None = Query(default=None),
+    start_date: str | None = Query(default=None, description="Start date in YYYY-MM-DD"),
+    end_date: str | None = Query(default=None, description="End date in YYYY-MM-DD"),
+    source: str = Query(default="all"),
+    user: dict | None = Depends(_get_optional_user),
+):
+    try:
+        default_start, default_end = _review_default_dates()
+        start_text, end_text = normalize_review_range(start_date or default_start, end_date or default_end)
+        code = _resolve_code(user, participant_code)
+        result = list_records(code, start_text, end_text, source)
+        return {"status": "success", **result}
+    except Exception as error:
+        raise _storage_error(error)
+
+
+@app.get("/api/admin/review/overview")
+async def admin_review_overview(
+    start_date: str | None = Query(default=None, description="Start date in YYYY-MM-DD"),
+    end_date: str | None = Query(default=None, description="End date in YYYY-MM-DD"),
+    participant_code: str = Query(default="all"),
+    admin_token: str | None = Query(default=None),
+    x_admin_token: str | None = Header(default=None),
+    user: dict = Depends(_get_required_user),
+):
+    try:
+        # Accept either JWT session admin or admin_token
+        is_session_admin = user.get("role") == "admin"
+        if not is_session_admin:
+            _check_api_admin_token(admin_token, x_admin_token)
+        default_start, default_end = _review_default_dates()
+        start_text, end_text = normalize_review_range(start_date or default_start, end_date or default_end)
+        if str(participant_code or "all").strip().lower() == "all":
+            stats = get_review_overview_all(start_text, end_text)
+        else:
+            code = _review_participant_code(participant_code)
+            stats = get_review_overview(code, start_text, end_text)
+        return {
+            "status": "success",
+            "participant_code": participant_code,
+            "start_date": start_text,
+            "end_date": end_text,
+            "period_type": review_period_type(start_text, end_text),
+            "stats": stats,
+        }
+    except HTTPException:
+        raise
+    except Exception as error:
+        raise _storage_error(error)
+
+
+@app.get("/api/admin/records")
+async def admin_records_api(
+    start_date: str | None = Query(default=None, description="Start date in YYYY-MM-DD"),
+    end_date: str | None = Query(default=None, description="End date in YYYY-MM-DD"),
+    participant_code: str = Query(default="all"),
+    source: str = Query(default="all"),
+    admin_token: str | None = Query(default=None),
+    x_admin_token: str | None = Header(default=None),
+    user: dict = Depends(_get_required_user),
+):
+    try:
+        # Accept either JWT session admin or admin_token
+        is_session_admin = user.get("role") == "admin"
+        if not is_session_admin:
+            _check_api_admin_token(admin_token, x_admin_token)
+        default_start, default_end = _review_default_dates()
+        start_text, end_text = normalize_review_range(start_date or default_start, end_date or default_end)
+        result = list_records_all(start_text, end_text, source, participant_code)
+        return {"status": "success", **result}
+    except HTTPException:
+        raise
+    except Exception as error:
+        raise _storage_error(error)
+
+
 # --- 3. 核心路由控制器 (Controller) ---
 
 def process_typography_request(text: str, vad: dict, acoustics: dict):
@@ -910,6 +2060,251 @@ def process_typography_request(text: str, vad: dict, acoustics: dict):
     print("🤖 MISS: Handing over to LLM...")
     # return call_llm_typography_design(text, vad, acoustics)
     return call_llm_typography_design_2(text, vad, acoustics)
+
+
+
+class BodySensationAdviceRequest(BaseModel):
+    participant_code: str | None = Field(default=None, max_length=64)
+    journal_text: str = Field(default="", max_length=20000)
+    selected_regions: list[dict] = Field(default_factory=list)
+    symptoms: list[dict] = Field(default_factory=list)
+    free_text: str = Field(default="", max_length=12000)
+    include_recent_diaries: bool = True
+    recent_diary_limit: int = Field(default=3, ge=0, le=10)
+
+
+
+@app.get("/body")
+@app.get("/body-sensation")
+@app.get("/body_sensation")
+async def body_sensation_page():
+    page_path = Path(__file__).resolve().parent / "static" / "body_sensation.html"
+    return FileResponse(page_path)
+
+
+@app.head("/body")
+@app.head("/body-sensation")
+@app.head("/body_sensation")
+async def body_sensation_page_head():
+    return Response(status_code=200, media_type="text/html")
+
+@app.post("/body-sensation/advice")
+async def body_sensation_advice(payload: BodySensationAdviceRequest):
+    try:
+        from emotion_rec.body_sensation import generate_body_sensation_advice
+    except ModuleNotFoundError:
+        from body_sensation import generate_body_sensation_advice  # type: ignore
+
+    try:
+        payload_data = payload.model_dump() if hasattr(payload, "model_dump") else payload.dict()
+        result = generate_body_sensation_advice(payload_data)
+        return Response(
+            content=json.dumps(result, ensure_ascii=False),
+            media_type="application/json; charset=utf-8",
+        )
+    except Exception as error:
+        print(f"[body_sensation] endpoint failed: {error}")
+        return {
+            "status": "error",
+            "message": str(error),
+            "body_sensation": {
+                "selected_regions": [],
+                "symptoms": [],
+            },
+            "emotion_context": {},
+            "possible_links": [],
+            "advice": {
+                "source": "error_fallback",
+                "title": "暂时无法生成身体感受建议",
+                "summary": "后端处理时遇到问题，但这不影响你继续记录情绪日记。",
+                "steps": [
+                    "先记录症状出现的时间、持续多久、强度变化。",
+                    "如果症状明显或持续加重，请优先寻求专业医疗帮助。",
+                ],
+                "reflection_prompt": "可以稍后再试一次，或补充更多关于睡眠、饮食、咖啡因和压力事件的信息。",
+                "when_to_seek_help": [
+                    "胸痛、呼吸困难、晕厥、剧烈头痛、麻木无力、血便或高烧时，请及时就医。"
+                ],
+                "not_medical_diagnosis": True,
+            },
+            "safety": {
+                "risk_level": "unknown",
+                "red_flags": [],
+                "not_medical_diagnosis": True,
+            },
+            "logged": False,
+        }
+
+
+@app.post("/api/uploads")
+async def upload_image(
+    file: UploadFile = File(...),
+    context: str = Form("general"),
+):
+    """Receive an uploaded image and run Gemini VLM emotion analysis on it.
+
+    Mirrors the LLM fallback contract used elsewhere: when Gemini has no key,
+    is disabled, or the call fails, ``analysis`` is ``None`` and the upload
+    still succeeds so the UI never breaks on a missing key.
+    """
+    raw = await file.read()
+    if not raw:
+        raise HTTPException(status_code=400, detail="Empty image file")
+
+    mime = file.content_type or "image/jpeg"
+    if not mime.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Uploaded file is not an image")
+
+    analysis = gemini_client.analyze_image(raw, mime_type=mime, context=context)
+
+    return {
+        "status": "success",
+        "filename": file.filename,
+        "context": context,
+        "analyzed": analysis is not None,
+        "analysis": analysis,
+    }
+
+
+class CombinedAnalysisRequest(BaseModel):
+    text: str = Field(default="", max_length=6000)
+    image_analysis: dict | None = None
+
+
+@app.post("/api/analyze-combined")
+async def analyze_combined(payload: CombinedAnalysisRequest):
+    """Combine text emotion and image analysis into a single fused emotion result.
+
+    Text is primary; image context nudges the result when text explicitly
+    references what is in the image, or when both signals agree.
+    Returns ``combined_emotion`` with primary_emotion, valence, arousal, color.
+    """
+    text = payload.text.strip()
+    img = payload.image_analysis or {}
+
+    if not text:
+        return {"status": "error", "detail": "text is required"}
+
+    if not img:
+        # No image — just return the text analysis
+        emotion = infer_text_emotion(text)
+        overall = emotion["va_mapping"]["overall"]
+        return {
+            "status": "success",
+            "combined_emotion": {
+                "primary_emotion": emotion["primary"],
+                "valence": overall.get("valence", 0.0),
+                "arousal": overall.get("arousal", 0.0),
+                "color": emotion.get("color", ""),
+                "source": "text_only",
+            },
+        }
+
+    img_emotion = img.get("primary_emotion") or img.get("evoked_emotion") or ""
+    img_description = img.get("description", "")
+    img_reflection = img.get("reflection", "")
+    img_valence = float(img.get("valence") or 0.0)
+    img_arousal = float(img.get("arousal") or 0.0)
+    img_color = img.get("color", "")
+
+    system_prompt = (
+        "你是 EmoBridge 的多模态情绪融合分析师。"
+        "用户提供了一段文字（主要信号）和一张图片的情绪分析结果（辅助信号）。"
+        "请综合判断：文字为主（权重约 70%），但如果文字中明确提到图片内容或图片情绪与文字高度一致，"
+        "则图片权重可适当提升（最高 40%）。"
+        "仅输出合法 JSON，不要 Markdown，不要解释。"
+        "字段：primary_emotion（中文情绪词），valence（-1.0~1.0），arousal（-1.0~1.0），"
+        "color（十六进制颜色），source（'combined' 或 'text_dominant'）。"
+    )
+
+    user_content = json.dumps({
+        "text": text,
+        "image_emotion": img_emotion,
+        "image_description": img_description,
+        "image_reflection": img_reflection,
+        "image_valence": img_valence,
+        "image_arousal": img_arousal,
+    }, ensure_ascii=False)
+
+    combined = None
+    try:
+        combined = llm_client.chat_json(
+            [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_content},
+            ],
+            temperature=0.15,
+            max_tokens=256,
+        )
+    except Exception as exc:
+        print(f"[analyze_combined] LLM error: {exc}")
+
+    if not isinstance(combined, dict) or not combined.get("primary_emotion"):
+        # Fallback: weighted average of text + image V-A
+        text_emotion = infer_text_emotion(text)
+        overall = text_emotion["va_mapping"]["overall"]
+        t_v = float(overall.get("valence", 0.0))
+        t_a = float(overall.get("arousal", 0.0))
+        fused_v = round(0.7 * t_v + 0.3 * img_valence, 3)
+        fused_a = round(0.7 * t_a + 0.3 * img_arousal, 3)
+        combined = {
+            "primary_emotion": text_emotion["primary"],
+            "valence": fused_v,
+            "arousal": fused_a,
+            "color": text_emotion.get("color") or img_color or "",
+            "source": "fallback_blend",
+        }
+
+    return {"status": "success", "combined_emotion": combined}
+
+
+_whisper_pipeline = None
+_whisper_lock = __import__("threading").Lock()
+
+def _get_whisper_pipeline():
+    global _whisper_pipeline
+    if _whisper_pipeline is not None:
+        return _whisper_pipeline
+    with _whisper_lock:
+        if _whisper_pipeline is not None:
+            return _whisper_pipeline
+        try:
+            from transformers import pipeline as hf_pipeline
+            _whisper_pipeline = hf_pipeline(
+                "automatic-speech-recognition",
+                model="openai/whisper-tiny",
+                chunk_length_s=30,
+                generate_kwargs={"language": "chinese", "task": "transcribe"},
+            )
+        except Exception:
+            _whisper_pipeline = None
+    return _whisper_pipeline
+
+
+@app.post("/api/transcribe")
+async def transcribe_audio(file: UploadFile = File(...)):
+    raw = await file.read()
+    if not raw:
+        raise HTTPException(status_code=400, detail="Empty audio file")
+    pipe = _get_whisper_pipeline()
+    if pipe is None:
+        raise HTTPException(status_code=503, detail="Transcription model unavailable")
+    import tempfile, os
+    suffix = ".webm" if (file.content_type or "").startswith("audio/webm") else ".wav"
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+        tmp.write(raw)
+        tmp_path = tmp.name
+    try:
+        result = pipe(tmp_path)
+        text = (result.get("text") or "").strip()
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Transcription failed: {exc}")
+    finally:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+    return {"text": text}
 
 
 @app.post("/analyze-text")
@@ -1033,6 +2428,101 @@ async def predict(
         if wav_path and os.path.exists(wav_path):
             try: os.remove(wav_path)
             except: pass
+
+# -----------------------------
+# Emo Echo Chat API
+# -----------------------------
+
+_EMO_ECHO_SYSTEM_PROMPT = """你是「Emo 回响」，EmoBridge 情感陪伴助手。
+你的角色是温柔、真诚的情绪倾听者，像一位有见识的朋友，不是心理医生。
+
+规则：
+- 语气温暖、口语化，不过度正式
+- 多使用「好像」「看起来」「也许」等，不轻易下结论
+- 不做诊断、不评判、不建议停药或替代专业帮助
+- 可以结合用户最近的日记或随手记轻轻呼应，但不要生硬引用
+- 每次回复控制在 3-5 句，不要长篇大论
+- 适当提出一个温柔的开放性问题，引导用户继续诉说
+- 开场白：你好，我是 Emo 回响，心事诉说，情绪皆有回响。"""
+
+
+class EchoChatRequest(BaseModel):
+    message: str = Field(..., min_length=1, max_length=1000)
+    session_id: str = Field(..., min_length=8, max_length=64)
+    history: list[dict] = Field(default_factory=list)
+    participant_code: str | None = Field(default=None, min_length=2, max_length=64)
+
+
+@app.get("/api/emo-echo/sessions")
+async def emo_echo_sessions(
+    participant_code: str | None = Query(default=None),
+    user: dict | None = Depends(_get_optional_user),
+):
+    code = _resolve_code(user, participant_code)
+    try:
+        sessions = list_echo_sessions(code)
+        return {"status": "success", "sessions": sessions}
+    except Exception as e:
+        return {"status": "success", "sessions": []}
+
+
+@app.post("/api/emo-echo/chat")
+async def emo_echo_chat(
+    payload: EchoChatRequest,
+    user: dict | None = Depends(_get_optional_user),
+):
+    code = _resolve_code(user, payload.participant_code)
+
+    # get or create session in db
+    try:
+        session_info = get_or_create_echo_session(code, payload.session_id)
+        session_db_id = session_info["id"]
+    except Exception as e:
+        print(f"[emo_echo] session error: {e}")
+        session_db_id = None
+
+    # build context from last 15 days of user data
+    context_text = ""
+    try:
+        context_text = get_echo_context(code, days=15)
+    except Exception as e:
+        print(f"[emo_echo] context error: {e}")
+
+    system_content = _EMO_ECHO_SYSTEM_PROMPT
+    if context_text:
+        system_content += f"\n\n以下是用户最近 15 天的情绪记录，供你参考（请勿机械引用）：\n{context_text}"
+
+    # build messages for LLM
+    messages = [{"role": "system", "content": system_content}]
+    for h in payload.history[-10:]:
+        role = h.get("role", "")
+        content = str(h.get("content", "")).strip()
+        if role in ("user", "assistant") and content:
+            messages.append({"role": role, "content": content})
+    messages.append({"role": "user", "content": payload.message})
+
+    # call LLM
+    reply = None
+    try:
+        reply = llm_client.chat(messages, temperature=0.72, max_tokens=512)
+        if reply:
+            reply = llm_client.strip_content(reply)
+    except Exception as e:
+        print(f"[emo_echo] llm error: {e}")
+
+    if not reply:
+        reply = "嗯，我在这里。你说的，我都在认真听。可以多讲一点吗？"
+
+    # persist messages
+    if session_db_id is not None:
+        try:
+            save_echo_message(session_db_id, "user", payload.message)
+            save_echo_message(session_db_id, "assistant", reply)
+        except Exception as e:
+            print(f"[emo_echo] save message error: {e}")
+
+    return {"reply": reply, "session_id": payload.session_id}
+
 
 if __name__ == "__main__":
     import uvicorn

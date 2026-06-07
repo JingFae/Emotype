@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>登录 | EmoBridge</title>
+  <link rel="stylesheet" href="/static/styles.css?v=20260607a" />
+  <link rel="stylesheet" href="/static/login.css?v=20260607a" />
+</head>
+<body class="login-page">
+
+<main class="app-shell login-shell">
+
+  <section class="login-card warm-card">
+    <!-- Brand -->
+    <div class="brand-mark">
+      <a href="/">
+        <img class="brand-icon2" src="/static/icon2-only.png" alt="" aria-hidden="true" />
+      </a>
+      <a href="/">
+        <img class="brand-name-img" src="/static/name-text.png" alt="emobridge" />
+      </a>
+    </div>
+
+    <!-- Welcome -->
+    <div class="login-welcome" id="welcomeText">
+      <h1>欢迎回来</h1>
+      <p>登录你的 EmoBridge 账户，继续情绪之旅</p>
+    </div>
+
+    <!-- Mode toggle -->
+    <div class="mode-row">
+      <button class="mode-button is-active" id="loginTab" type="button">登录</button>
+      <button class="mode-button" id="registerTab" type="button">注册新账户</button>
+    </div>
+
+    <!-- Login form -->
+    <form class="login-form" id="loginForm">
+      <label class="participant-code-control">
+        <span>用户名</span>
+        <input type="text" id="loginUsername" placeholder="输入你的用户名" autocomplete="username" required />
+      </label>
+      <label class="participant-code-control">
+        <span>密码</span>
+        <input type="password" id="loginPassword" placeholder="输入密码" autocomplete="current-password" required />
+      </label>
+      <button class="warm-btn primary" type="submit">登 录</button>
+    </form>
+
+    <!-- Register form (hidden by default) -->
+    <form class="login-form" id="registerForm" style="display:none">
+      <label class="participant-code-control">
+        <span>用户名</span>
+        <input type="text" id="regUsername" placeholder="2-64位字母、数字、下划线或短横线" autocomplete="username" required />
+      </label>
+      <label class="participant-code-control">
+        <span>密码</span>
+        <input type="password" id="regPassword" placeholder="至少4位" autocomplete="new-password" required />
+      </label>
+      <label class="participant-code-control">
+        <span>显示名（选填）</span>
+        <input type="text" id="regDisplayName" placeholder="你希望别人看到的名称" autocomplete="name" />
+      </label>
+      <button class="warm-btn primary" type="submit">注 册</button>
+    </form>
+
+    <p class="login-status" id="loginStatus"></p>
+
+    <div class="login-divider">或者</div>
+
+    <p class="login-hint">
+      <a href="/">← 返回首页（游客模式）</a>
+    </p>
+  </section>
+
+</main>
+
+<script src="/static/auth.js?v=20260607a"></script>
+<script src="/static/login.js?v=20260607a"></script>
+</body>
+</html>

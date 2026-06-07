@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="report-source" content="C:\Users\yu_da\Desktop\ACL2026\2020_AICA_Bench_Holistically_接受提交版.pdf">
+  <meta name="project-source" content="C:\Users\yu_da\Desktop\Emotype">
+  <title>AICA-Bench 与 EmoMirror 融合及答辩指导方案</title>
+  <style>
+    :root {
+      --bg: #f5f7fb;
+      --paper: #ffffff;
+      --ink: #172033;
+      --muted: #5d6678;
+      --line: #e1e6ef;
+      --blue: #476aa9;
+      --blue-soft: #eaf1fe;
+      --gold: #9d8128;
+      --gold-soft: #fff6cf;
+      --orange: #b95f38;
+      --orange-soft: #ffeddf;
+      --green: #477b2f;
+      --green-soft: #e8f4dc;
+      --red: #9f3d45;
+      --red-soft: #fbe7e8;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--bg);
+      font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", sans-serif;
+    }
+    main {
+      width: min(1080px, calc(100% - 32px));
+      margin: 28px auto 72px;
+      padding: 48px 56px 64px;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      box-shadow: 0 20px 60px rgba(39, 54, 85, 0.08);
+    }
+    header, section { margin-bottom: 38px; }
+    h1, h2, h3 { line-height: 1.25; }
+    h1 { margin: 0 0 14px; font-size: clamp(30px, 4vw, 46px); letter-spacing: -0.03em; }
+    h2 { margin: 0 0 16px; font-size: 26px; }
+    h3 { margin: 24px 0 10px; font-size: 19px; }
+    p, li { line-height: 1.78; }
+    p { margin: 10px 0; }
+    ul, ol { padding-left: 24px; }
+    code {
+      padding: 2px 6px;
+      border-radius: 6px;
+      background: #f0f3f8;
+      font-family: Consolas, monospace;
+      font-size: 0.92em;
+    }
+    .kicker {
+      margin-bottom: 12px;
+      color: var(--blue);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+    .lede { max-width: 850px; color: var(--muted); font-size: 18px; }
+    .summary-grid, .cards, .innovation-grid {
+      display: grid;
+      gap: 14px;
+    }
+    .summary-grid { grid-template-columns: repeat(3, 1fr); margin-top: 22px; }
+    .cards { grid-template-columns: repeat(2, 1fr); }
+    .innovation-grid { grid-template-columns: repeat(4, 1fr); }
+    .card, .summary-card, .innovation-card {
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #fbfcfe;
+    }
+    .summary-card strong, .innovation-card strong { display: block; margin-bottom: 6px; }
+    .summary-card.blue { background: var(--blue-soft); border-color: #cddcfa; }
+    .summary-card.gold { background: var(--gold-soft); border-color: #f0dfa0; }
+    .summary-card.orange { background: var(--orange-soft); border-color: #f4cbb8; }
+    .callout {
+      margin: 18px 0;
+      padding: 17px 19px;
+      border-left: 5px solid var(--blue);
+      border-radius: 8px;
+      background: var(--blue-soft);
+    }
+    .warning { border-left-color: var(--red); background: var(--red-soft); }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 18px 0;
+      font-size: 14px;
+    }
+    th, td {
+      padding: 12px 10px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+      line-height: 1.55;
+    }
+    th { background: #f3f6fa; font-weight: 700; }
+    .status-done { color: var(--green); font-weight: 700; }
+    .status-partial { color: var(--gold); font-weight: 700; }
+    .status-missing { color: var(--red); font-weight: 700; }
+    .architecture {
+      display: grid;
+      grid-template-columns: 1fr auto 1.15fr auto 1.15fr auto 1fr;
+      gap: 10px;
+      align-items: stretch;
+      margin: 22px 0;
+    }
+    .arch-box {
+      min-height: 150px;
+      padding: 16px;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: #fbfcfe;
+    }
+    .arch-box strong { display: block; margin-bottom: 10px; color: var(--blue); }
+    .arrow { align-self: center; color: var(--muted); font-size: 24px; }
+    .formula {
+      overflow-x: auto;
+      padding: 16px 18px;
+      background: #172033;
+      color: #f8fafc;
+      border-radius: 12px;
+      font-family: Consolas, monospace;
+      line-height: 1.7;
+    }
+    figure {
+      margin: 22px 0;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #fcfcfd;
+    }
+    figure img { display: block; width: 100%; height: auto; }
+    figcaption { margin-top: 10px; color: var(--muted); font-size: 13px; line-height: 1.6; }
+    .phase {
+      display: grid;
+      grid-template-columns: 110px 1fr 170px;
+      gap: 16px;
+      padding: 14px 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .phase strong { color: var(--blue); }
+    .slide-table td:first-child { width: 60px; font-weight: 700; color: var(--blue); }
+    .slide-table td:nth-child(2) { width: 190px; font-weight: 700; }
+    .small { color: var(--muted); font-size: 13px; }
+    @media (max-width: 820px) {
+      main { width: min(100% - 16px, 1080px); margin-top: 8px; padding: 30px 20px 48px; }
+      .summary-grid, .cards, .innovation-grid { grid-template-columns: 1fr; }
+      .architecture { grid-template-columns: 1fr; }
+      .arrow { transform: rotate(90deg); justify-self: center; }
+      .phase { grid-template-columns: 1fr; gap: 4px; }
+    }
+  </style>
+</head>
+<body>
+  <main data-report-audience="technical">
+    <header data-contract-section="title">
+      <div class="kicker">Technical integration & defense plan</div>
+      <h1>AICA-Bench 与 EmoMirror 融合及答辩指导方案</h1>
+      <p class="lede">依据 AICA-Bench 接受提交版全文与当前 Emotype/EmoMirror 仓库实现，给出一条兼顾项目完成度、工程工作量、实验可信度和创新表达的融合路线。</p>
+    </header>
+
+    <section data-contract-section="technical-summary">
+      <h2>技术结论</h2>
+      <p><strong>最推荐的项目定位是：</strong>“面向情绪日记与动态字体表达的多模态情感理解、推理和生成系统”。AICA-Bench 不应作为独立附加实验，而应成为项目的视觉情感分支与评测方法；项目已有的语音、文本、V-A 映射、动态字体、用户修正和数据闭环则构成应用落地。</p>
+      <div class="summary-grid">
+        <div class="summary-card blue">
+          <strong>论文负责补足</strong>
+          图像情绪理解、视觉证据推理、情感一致描述、GAT 强度校准与开放式生成评测。
+        </div>
+        <div class="summary-card gold">
+          <strong>项目已有基础</strong>
+          语音 VAD、文本 V-A、统一词典映射、字符级动态字体、交互修正、研究数据保存与部署。
+        </div>
+        <div class="summary-card orange">
+          <strong>项目新增贡献</strong>
+          跨模态统一表征、置信度融合、冲突检测、视觉证据驱动排版、人机协同校准和完整消融实验。
+        </div>
+      </div>
+      <div class="callout warning">
+        <strong>答辩表述边界：</strong>不要说“把 AICA-Bench 模型接入了项目”。AICA-Bench 是基准、评分模型与提示框架。准确说法是“复现并工程化其视觉脚手架和 GAT 推理范式，构建项目视觉情感模块，并在统一 V-A 空间中与语音、文本结果融合”。
+      </div>
+    </section>
+
+    <section data-contract-section="key-findings">
+      <h2>当前项目已经具备较高完成度，但缺少视觉分支和正式评测</h2>
+      <p>代码审计显示，系统已形成“输入分析—情感映射—动态反馈—用户修正—数据保存—部署”的可运行链路。新增工作应集中在视觉情感、跨模态融合与实验验证，而不是重写现有主链路。</p>
+      <table>
+        <thead>
+          <tr><th>能力模块</th><th>当前状态</th><th>代码证据</th><th>答辩价值</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>语音情绪 VAD</td><td class="status-done">已实现</td><td><code>/predict</code>、本地 Wav2Vec2、pitch/energy</td><td>本地模型能力与声学特征工程</td></tr>
+          <tr><td>文本情绪分析</td><td class="status-partial">可运行，模型路径仍可加强</td><td><code>text_emotion.py</code>：回归头/分类器/规则多层回退</td><td>显式与隐式情绪识别</td></tr>
+          <tr><td>统一 V-A 映射</td><td class="status-done">已实现</td><td><code>va_mapper.py</code>、80 标签词典、候选标签与置信度</td><td>多模态统一接口的基础</td></tr>
+          <tr><td>动态字体生成</td><td class="status-done">已实现</td><td>LLM + 本地回退、字符索引设计图、动画/颜色/字号</td><td>核心应用创新与展示效果</td></tr>
+          <tr><td>用户交互与数据闭环</td><td class="status-done">已实现</td><td>V-A 手动修正、标签修改、日记保存、事件记录、JSON/CSV 导出</td><td>完成度、人机协同和用户研究基础</td></tr>
+          <tr><td>部署</td><td class="status-done">已配置</td><td>FastAPI、Docker、Render、SQLite/PostgreSQL</td><td>工程完整性</td></tr>
+          <tr><td>视觉情感分析</td><td class="status-missing">尚未实现</td><td>当前无图像输入、VLM、视觉证据字段</td><td>本次论文融合的主要工作包</td></tr>
+          <tr><td>系统化评测</td><td class="status-missing">明显不足</td><td>缺少基准集结果、消融、时延统计和用户研究结果</td><td>答辩最需要补强的证据</td></tr>
+        </tbody>
+      </table>
+
+      <figure>
+        <img src="assets/gat_task_gains.png" alt="AICA-Bench 论文中 GAT 在三类任务上的平均提升">
+        <figcaption>AICA-Bench 接受提交版报告：GAT 在 EU、ER、EGCG 上平均提升 6.15、3.54、3.96 个百分点。这个结果支持“视觉脚手架 + 结构化情感推理”作为项目视觉分支的技术选择，但不能替代项目自己的复现实验。</figcaption>
+      </figure>
+    </section>
+
+    <section data-contract-section="scope-data-and-metric-definitions">
+      <h2>论文中最值得迁移的四项能力</h2>
+      <div class="cards">
+        <div class="card"><strong>1. 三段式任务链</strong><p>EU 识别图像表达或诱发的情绪；ER 解释视觉证据为何导致情绪；EGCG 生成与目标情绪一致、且不脱离图像事实的描述。</p></div>
+        <div class="card"><strong>2. 视觉脚手架</strong><p>利用图分割得到 2–4 个编号区域，迫使模型先描述客观视觉事实，再进行情感判断，减少只看人脸或依赖语言先验。</p></div>
+        <div class="card"><strong>3. AffectToT 强度校准</strong><p>生成 3 个“情绪 + 强度”候选，引用区域证据，再进行事实核验和分支剪枝，重点缓解 arousal 强度误判。</p></div>
+        <div class="card"><strong>4. 开放式任务评测</strong><p>ER 评估情感一致性、描述性、因果合理性；EGCG 评估情感一致性和描述性。项目可沿用同一人工评分量表。</p></div>
+      </div>
+      <p class="small">论文范围：9 个公开数据集、8,086 张图像、18,124 条指令、23 个 VLM；EU 主指标为 Weighted F1。论文同时指出 72.25% 的 EU 错误属于强度错误，遮挡人脸后 F1 下降 11.1%，并发现开放式输出存在描述浅表化。</p>
+    </section>
+
+    <section data-contract-section="methodology">
+      <h2>建议的融合架构：从“三种识别器”升级为“可解释的多模态闭环”</h2>
+      <div class="architecture">
+        <div class="arch-box">
+          <strong>多模态输入</strong>
+          文本日记<br>语音录制<br>照片/场景图像<br>用户修正
+        </div>
+        <div class="arrow">→</div>
+        <div class="arch-box">
+          <strong>单模态分析</strong>
+          文本：显式/隐式 V-A<br>语音：Wav2Vec2 VAD<br>图像：EU + GAT<br>图像：ER 证据链
+        </div>
+        <div class="arrow">→</div>
+        <div class="arch-box">
+          <strong>统一情感状态</strong>
+          统一 V-A-D 坐标<br>模态置信度<br>区域证据<br>一致性/冲突分数
+        </div>
+        <div class="arrow">→</div>
+        <div class="arch-box">
+          <strong>生成与闭环</strong>
+          动态字体设计图<br>解释与候选标签<br>用户拖拽修正<br>保存与后续校准
+        </div>
+      </div>
+
+      <h3>关键设计一：区分“表达情绪”和“诱发情绪”</h3>
+      <p>AICA-Bench 的 Expressed Emotion 与 Evoked Emotion 不能直接混合。对情绪日记而言，文本和语音主要描述用户自身状态；图像中的人物表情可作为自身状态证据，而场景诱发情绪更适合作为环境语境先验。否则，一张悲伤照片可能把用户平静的叙述错误拉向负面。</p>
+
+      <h3>关键设计二：置信度与可靠性加权的后融合</h3>
+      <div class="formula">
+        z_m = (valence, arousal, dominance)<br>
+        z_fused = sum(r_m * c_m * z_m) / sum(r_m * c_m)<br>
+        其中 c_m 为模型置信度，r_m 为模态可靠性；当模态距离超过阈值时，不强行平均，而是触发“存在情绪冲突”的可解释反馈。
+      </div>
+      <p>建议先采用可解释后融合，而不是训练复杂端到端模型。它更适合当前数据规模，也便于消融、答辩说明和用户手动修正。</p>
+
+      <h3>关键设计三：让视觉证据真正进入动态字体</h3>
+      <p>不要停在“图像输出一个标签”。可将区域证据转为排版控制：颜色/亮度影响色彩与透明度，构图张力影响字距和位移，视觉强度影响缩放与动画速度，ER 的关键词定位到字符索引。这样形成“视觉事实—情感状态—排版参数”的可解释链路。</p>
+
+      <h3>建议新增的工程模块</h3>
+      <table>
+        <thead><tr><th>模块</th><th>职责</th><th>建议接口/输出</th></tr></thead>
+        <tbody>
+          <tr><td><code>visual_emotion.py</code></td><td>图分割、区域编号、VLM EU/ER/EGCG 调用与本地回退</td><td><code>visual_emotion</code>：expressed、evoked、intensity、regions、evidence</td></tr>
+          <tr><td><code>multimodal_fusion.py</code></td><td>标签到 V-A 对齐、可靠性加权、模态冲突检测</td><td><code>multimodal_emotion</code>：fused_vad、agreement、conflicts、contributions</td></tr>
+          <tr><td><code>typography_grounding.py</code></td><td>把区域证据、V-A 和声学强度转成字符级设计图</td><td>保持现有 <code>llm_design</code> 契约不变</td></tr>
+          <tr><td><code>evaluation/</code></td><td>基准子集、消融、时延和评分脚本</td><td>CSV/JSON 结果与答辩图表</td></tr>
+          <tr><td><code>POST /analyze-image</code></td><td>独立验证视觉分支</td><td>便于模块测试与现场演示</td></tr>
+          <tr><td><code>POST /analyze-multimodal</code></td><td>统一接收文本、音频、图像</td><td>返回各模态原始结果、融合结果和设计图</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section data-contract-section="limitations-uncertainty-and-robustness-checks">
+      <h2>实验设计决定答辩可信度</h2>
+      <p><strong>不要复现 23 个模型和 8,086 张图像。</strong>课程/毕业项目更适合做一个有代表性的子集与完整消融。建议选择 200–500 张图像，覆盖人物场景、无人物场景、艺术照片和抽象图像；比较 1 个闭源 VLM 与 1 个可部署开源 VLM。</p>
+      <table>
+        <thead><tr><th>实验</th><th>对照组</th><th>指标</th><th>要证明什么</th></tr></thead>
+        <tbody>
+          <tr><td>视觉分支复现</td><td>Basic Prompt vs CoT vs GAT</td><td>Weighted F1；强度错误率；V-A MAE</td><td>GAT 是否改善视觉情绪与 arousal 校准</td></tr>
+          <tr><td>开放式质量</td><td>无区域证据 vs 视觉脚手架</td><td>Alignment、Descriptiveness、Causal Soundness，1–5 分</td><td>解释和生成是否更具体、更可信</td></tr>
+          <tr><td>多模态消融</td><td>Text / Audio / Image / 简单平均 / 置信度融合</td><td>V-A MAE、标签 F1、一致率</td><td>融合是否优于单模态与朴素平均</td></tr>
+          <tr><td>冲突处理</td><td>强制融合 vs 冲突检测 + 用户确认</td><td>用户最终修正距离、信任评分</td><td>人机协同是否减少错误反馈</td></tr>
+          <tr><td>排版生成</td><td>静态文本 / V-A 规则 / LLM / 视觉证据驱动</td><td>情感匹配、表达力、可读性、偏好</td><td>动态字体是否真正增强情感表达</td></tr>
+          <tr><td>工程性能</td><td>不同输入与回退路径</td><td>P50/P95 时延、失败率、内存、WAV/WebM 成功率</td><td>系统完成度和可部署性</td></tr>
+        </tbody>
+      </table>
+      <div class="callout">
+        <strong>最低可接受证据包：</strong>至少给出 3 组定量图表：GAT 对比、融合消融、排版用户评分；再给出 2–3 个成功案例和 1–2 个失败案例。只有界面截图而没有实验表，老师很难判断技术改进是否有效。
+      </div>
+      <p><strong>局限性需要主动讲：</strong>视觉情感具有主观与文化差异；论文只处理静态图像和英文提示；自动评分模型也有偏差；当前文本回归头和多模态可靠性参数需要更多标注数据校准。主动说明边界会增加可信度，而不是减分。</p>
+    </section>
+
+    <section data-contract-section="recommended-next-steps">
+      <h2>创新性应按四层表达，而不是堆模型名称</h2>
+      <div class="innovation-grid">
+        <div class="innovation-card"><strong>集成创新</strong>Wav2Vec2、中文文本情绪、VLM/GAT、统一 V-A、动态字体、数据库与部署形成端到端系统。</div>
+        <div class="innovation-card"><strong>应用创新</strong>将多模态情感理解用于情绪日记和生成式动态排版，不只是输出标签，而是提供可感知反馈。</div>
+        <div class="innovation-card"><strong>改进创新</strong>区分 expressed/evoked，加入强度校准、置信度融合、冲突检测、用户修正和离线回退。</div>
+        <div class="innovation-card"><strong>项目级原创</strong>提出“区域证据—统一情感状态—字符级动态字体”的可解释闭环，并用用户修正数据持续校准。</div>
+      </div>
+      <div class="callout warning">
+        <strong>原创性措辞建议：</strong>可以说“提出项目级的新型交互与融合机制”，不要在没有新算法理论和大规模实验时宣称“原创基础模型”或“首创情感计算算法”。
+      </div>
+
+      <h3>实施优先级</h3>
+      <div class="phase"><strong>P0 可演示</strong><span>图像上传、VLM Basic/GAT 两种模式、标签到 V-A 映射、结果在前端显示。</span><span>先打通全链路</span></div>
+      <div class="phase"><strong>P1 有技术含量</strong><span>图分割编号、expressed/evoked 分离、置信度融合、冲突提示、区域证据驱动排版。</span><span>形成核心创新</span></div>
+      <div class="phase"><strong>P2 有证据</strong><span>200–500 张子集复现、消融实验、时延统计、20–30 人小型用户研究。</span><span>支撑答辩结论</span></div>
+      <div class="phase"><strong>P3 可扩展</strong><span>训练/校准文本 V-A 回归头、个性化可靠性、更多文化与语言数据。</span><span>作为未来工作</span></div>
+    </section>
+
+    <section data-contract-section="further-questions">
+      <h2>答辩 PPT：14 页主线框架</h2>
+      <p><strong>主叙事只讲一件事：</strong>现有情绪识别通常停留在单模态标签，本项目把多模态理解、视觉证据推理和动态字体表达连接成可交互、可修正、可评测的完整系统。</p>
+      <table class="slide-table">
+        <thead><tr><th>页</th><th>标题</th><th>核心内容与应放的证据</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>封面</td><td>项目名、成员、指导老师；副标题直接写“多模态情感理解与动态字体生成系统”。</td></tr>
+          <tr><td>2</td><td>问题与场景</td><td>用户情绪表达隐晦、单一标签缺乏解释、静态文本缺乏情感反馈；用 1 个真实日记场景引入。</td></tr>
+          <tr><td>3</td><td>研究目标与需求</td><td>理解文本/语音/图像情绪，解释原因，生成情感一致排版，允许用户修正并保存。</td></tr>
+          <tr><td>4</td><td>相关工作与缺口</td><td>简述语音情感、文本情感、AICA-Bench；指出现有工作缺少“多模态融合 + 表达生成 + 人机闭环”。</td></tr>
+          <tr><td>5</td><td>系统总体架构</td><td>放一张最重要的全链路图：输入层、分析层、统一情感层、生成层、交互与数据层。</td></tr>
+          <tr><td>6</td><td>语音与文本情感模块</td><td>Wav2Vec2 VAD、声学特征；文本分段、显式/隐式线索、回退策略；给一条真实输入输出。</td></tr>
+          <tr><td>7</td><td>AICA 视觉情感模块</td><td>EU/ER/EGCG，视觉分割编号，GAT 三阶段；放原图、区域图、证据链和最终标签。</td></tr>
+          <tr><td>8</td><td>多模态融合与冲突处理</td><td>统一 V-A-D、置信度加权公式、expressed/evoked 区分；展示一个模态一致案例和一个冲突案例。</td></tr>
+          <tr><td>9</td><td>情感到动态字体</td><td>V-A、声学强度、视觉证据如何控制颜色、大小、字重、字距和动画；放字符级设计图示例。</td></tr>
+          <tr><td>10</td><td>系统实现与完成度</td><td>前端、FastAPI、模型、数据库、导出、Docker/Render；用“已完成/进行中”矩阵，不要只贴代码。</td></tr>
+          <tr><td>11</td><td>实验设计</td><td>数据子集、模型、基线、指标、用户研究；先定义怎么验证，再给结果。</td></tr>
+          <tr><td>12</td><td>实验结果与消融</td><td>三张主图：GAT 提升、融合消融、排版用户评分；每张图上方写一句结论。</td></tr>
+          <tr><td>13</td><td>创新点总结</td><td>按集成、应用、改进、项目级原创四层展示；每项必须对应已实现模块或实验结果。</td></tr>
+          <tr><td>14</td><td>总结与展望</td><td>完成了什么、结果证明什么、局限与下一步；最后回到“理解—推理—生成—修正”的闭环。</td></tr>
+        </tbody>
+      </table>
+
+      <h3>现场演示建议：控制在 90 秒</h3>
+      <ol>
+        <li>输入一段包含隐性压力的文本，展示分段情绪、V-A 和动态字体。</li>
+        <li>上传相关场景图，展示区域编号、视觉情绪与证据解释。</li>
+        <li>播放/上传一段语音，展示声学 VAD 与融合结果。</li>
+        <li>故意展示一次模态冲突，拖动 V-A 或修改标签，保存日记。</li>
+        <li>展示历史记录或导出结果，证明系统不是一次性 Demo。</li>
+      </ol>
+      <p><strong>备用页建议：</strong>API 返回结构、数据库表、模型参数、GAT 提示词、更多失败案例、隐私与伦理、部署与资源占用。老师追问时再打开，不占主线时间。</p>
+
+      <h3>老师可能追问的四个问题</h3>
+      <ol>
+        <li><strong>为什么需要图像？</strong>图像提供环境与非语言语境，并支持情绪原因解释；项目区分表达情绪和诱发情绪，避免简单混合。</li>
+        <li><strong>融合为什么有效？</strong>用单模态、简单平均、置信度融合的消融结果回答，而不是只讲公式。</li>
+        <li><strong>LLM 是否决定情绪？</strong>不是。文本/语音/视觉分析产生结构化情感状态，LLM 主要负责受约束的动态字体设计；系统保留本地回退。</li>
+        <li><strong>原创在哪里？</strong>论文提供视觉评测与 GAT；项目贡献是跨模态统一、冲突处理、视觉证据驱动字符级排版和用户修正闭环。</li>
+      </ol>
+    </section>
+  </main>
+</body>
+</html>

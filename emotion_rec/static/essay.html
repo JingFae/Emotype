@@ -1,0 +1,480 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>情绪随笔 | EmoBridge</title>
+  <link rel="stylesheet" href="/static/styles.css?v=20260607c" />
+</head>
+<body>
+
+<svg class="bg-decoration" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <filter id="blob-blur" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="48"/>
+    </filter>
+  </defs>
+  <g filter="url(#blob-blur)">
+    <ellipse cx="1340" cy="70"  rx="150" ry="95"  fill="#F77761" opacity="0.38" transform="rotate(-22 1340 70)"/>
+    <ellipse cx="55"   cy="580" rx="110" ry="160" fill="#F77761" opacity="0.30" transform="rotate(18 55 580)"/>
+    <ellipse cx="110"  cy="140" rx="140" ry="85"  fill="#8FD2DD" opacity="0.35" transform="rotate(28 110 140)"/>
+    <ellipse cx="790"  cy="30"  rx="130" ry="58"  fill="#86BF9F" opacity="0.32" transform="rotate(-6 790 30)"/>
+  </g>
+</svg>
+
+<main class="app-shell">
+
+  <!-- TOPBAR -->
+  <header class="topbar">
+    <a class="brand-mark" href="/" aria-label="EmoBridge 首页">
+      <img class="brand-icon2" src="/static/icon2-only.png" alt="" aria-hidden="true" />
+      <img class="brand-name-img" src="/static/name-text.png" alt="emobridge" />
+    </a>
+    <nav class="view-tabs" aria-label="Primary navigation">
+      <a class="tab-button" href="/" data-i18n="nav.home">首页</a>
+      <a class="tab-button is-active" href="/essay" aria-current="page" data-i18n="nav.essay">情绪随笔</a>
+      <a class="tab-button" href="/body-sensation" data-i18n="nav.body">身体感受</a>
+      <a class="tab-button" href="/emo-echo" data-i18n="nav.ecoEcho">Emo 回响</a>
+      <a class="tab-button" href="/historyreview" data-i18n="nav.historyReview">历史回顾</a>
+      <a class="tab-button" href="/profile" id="profileTab" style="display:none" data-i18n="nav.profile">个人信息</a>
+      <a class="tab-button" href="/login" id="authTab" data-i18n="nav.login">登录</a>
+    </nav>
+    <div class="topbar-right"></div>
+  </header>
+
+  <!-- SUB-TAB NAV -->
+  <div class="sub-tab-bar" role="tablist" aria-label="情绪随笔��栏目">
+    <button class="sub-tab-btn is-active" type="button" data-target="momentView" role="tab" aria-selected="true">随手记</button>
+    <button class="sub-tab-btn"           type="button" data-target="diaryView"  role="tab" aria-selected="false">日记本</button>
+  </div>
+
+  <!-- ===== 随手记 (journal view) ===== -->
+  <div class="sub-section is-active" id="momentView" role="tabpanel">
+    <section class="view is-active" id="journalView" aria-labelledby="journalTitle">
+      <div class="journal-layout">
+
+        <!-- Editor pane -->
+        <section class="editor-pane">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">Express</p>
+              <h2 id="journalTitle">随手记</h2>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
+              <span class="status-pill" id="analysisStatus">就绪</span>
+              <span id="journalDateDisplay" style="font-size:13px;color:var(--muted);font-weight:600;white-space:nowrap;"></span>
+            </div>
+          </div>
+
+          <div class="input-mode-row" role="group">
+            <button class="mode-button is-active" type="button" id="typingMode">文字输入</button>
+            <button class="mode-button" type="button" id="voiceMode">语音转文字</button>
+          </div>
+
+          <textarea
+            id="journalText"
+            spellcheck="true"
+            placeholder="写下发生了什么。可以具体、模糊、矛盾，或者不确定。"
+          >今天我一直说没事，但开完会之后胸口有点紧。</textarea>
+
+          <div class="image-upload-row" id="journalImageRow">
+            <input type="file" id="journalImageInput" accept="image/*" multiple style="display:none" />
+            <button class="warm-btn ghost" type="button" id="journalImageBtn" style="font-size:13px;">上传图片</button>
+            <div class="image-preview-strip" id="journalImagePreview"></div>
+          </div>
+          <div id="journalCombinedEmotion" style="display:none;align-items:center;gap:6px;margin-top:4px;font-size:13px;color:var(--ink-warm);">
+            <span id="journalCombinedDot" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--amber);flex-shrink:0;"></span>
+            <span>综合情绪：</span><strong id="journalCombinedLabel"></strong>
+          </div>
+
+          <div class="editor-tools">
+            <label class="slider-control" for="intensityRange">
+              <span>镜像反馈强度</span>
+              <input id="intensityRange" type="range" min="0" max="100" value="80" />
+            </label>
+            <button class="warm-btn ghost" type="button" id="voiceButton">开始语音</button>
+            <button class="warm-btn primary" type="button" id="saveEntry">保存记录</button>
+          </div>
+        </section>
+
+        <!-- Mirror pane -->
+        <section class="mirror-pane" aria-labelledby="mirrorTitle">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">Live Mirror</p>
+              <h2 id="mirrorTitle">实时镜像</h2>
+            </div>
+            <span class="emotion-dot" id="emotionDot" aria-hidden="true"></span>
+          </div>
+
+          <div class="type-stage" id="typeStage" aria-live="polite"></div>
+
+          <div class="emotion-panel">
+            <div>
+              <span class="panel-label">识别结果</span>
+              <strong id="primaryEmotion">不明确</strong>
+              <p class="coordinate-summary" id="reflectionText"></p>
+            </div>
+            <div class="confidence-meter" aria-label="Confidence">
+              <i id="confidenceMeter"></i>
+            </div>
+          </div>
+
+          <div class="chip-row" id="emotionChips" aria-label="候选情绪标签"></div>
+
+          <div class="label-editor" aria-label="自定义情绪标签">
+            <label class="custom-label-control" for="customEmotionLabel">
+              <span>自定义标签</span>
+              <input id="customEmotionLabel" type="text"
+                placeholder="输入更贴近的情绪词"
+                autocomplete="off" />
+            </label>
+            <button class="warm-btn ghost" type="button" id="applyCustomLabel">应用</button>
+          </div>
+
+          <section class="va-control" aria-label="V-A 坐标">
+            <div class="va-control-head">
+              <span class="panel-label">V-A 坐标</span>
+              <strong id="vaReadout">V +0.00 · A +0.00</strong>
+            </div>
+            <div class="va-plane" id="vaPlane" role="slider" tabindex="0" aria-label="Valence arousal handle">
+              <span class="va-axis va-axis-x"></span>
+              <span class="va-axis va-axis-y"></span>
+              <span class="va-axis-label va-positive">积极</span>
+              <span class="va-axis-label va-negative">消极</span>
+              <span class="va-axis-label va-high">高能量</span>
+              <span class="va-axis-label va-low">低能量</span>
+              <button class="va-handle" id="vaHandle" type="button" aria-label="坐标拖拽手柄"></button>
+              <span class="va-image-marker" id="vaImageMarker" hidden aria-hidden="true"></span>
+            </div>
+            <div class="va-legend" id="vaLegend" hidden>
+              <span class="va-legend-item"><span class="va-legend-dot va-legend-user"></span>你 · 文字/语音</span>
+              <span class="va-legend-item"><span class="va-legend-dot va-legend-content"></span>画面 · 图片</span>
+            </div>
+          </section>
+
+          <!-- Dual-state affect comparison (User Affect vs Content Affect) -->
+          <section class="affect-duo" id="affectDuo" aria-label="多模态情绪对照">
+            <div class="affect-duo-head">
+              <span class="panel-label">多模态对照</span>
+              <span class="affect-consistency" id="affectConsistency" hidden></span>
+            </div>
+            <div class="affect-cards">
+              <article class="affect-card affect-card--user" id="userAffectCard">
+                <header class="affect-card-head">
+                  <span class="affect-dot affect-dot--user" id="userAffectDot"></span>
+                  <span>文字 / 语音</span>
+                </header>
+                <strong class="affect-emotion" id="userAffectEmotion">—</strong>
+                <span class="affect-va" id="userAffectVa">V +0.00 · A +0.00</span>
+              </article>
+              <article class="affect-card affect-card--content" id="contentAffectCard" hidden>
+                <header class="affect-card-head">
+                  <span class="affect-dot affect-dot--content" id="contentAffectDot"></span>
+                  <span>画面 / 图片</span>
+                </header>
+                <strong class="affect-emotion" id="contentAffectEmotion">—</strong>
+                <span class="affect-va" id="contentAffectVa">V +0.00 · A +0.00</span>
+                <p class="affect-detail" id="contentAffectDetail"></p>
+                <p class="affect-reflect" id="contentAffectReflect"></p>
+              </article>
+              <article class="affect-card affect-card--combined" id="combinedAffectCard" hidden
+                       style="border-color:rgba(139,92,246,0.30);background:linear-gradient(135deg,#f5f3ff,#ede9fe);">
+                <header class="affect-card-head">
+                  <span class="affect-dot" id="combinedAffectDot" style="background:var(--purple);"></span>
+                  <span style="color:var(--purple);font-weight:700;">综合情绪</span>
+                </header>
+                <strong class="affect-emotion" id="combinedAffectEmotion" style="color:var(--purple);">—</strong>
+                <span class="affect-va" id="combinedAffectVa">V +0.00 · A +0.00</span>
+              </article>
+            </div>
+          </section>
+        </section>
+
+      </div>
+    </section>
+  </div>
+
+  <!-- ===== 日记本 (diary iframe) ===== -->
+  <div class="sub-section" id="diaryView" role="tabpanel">
+    <iframe
+      id="diaryFrame"
+      class="embed-frame"
+      src="/diary?embed=1"
+      title="日记本"
+      loading="lazy">
+    </iframe>
+  </div>
+
+</main>
+
+<!-- Sub-tab switching -->
+<script>
+(function () {
+  var btns = document.querySelectorAll('.sub-tab-btn');
+  var panels = document.querySelectorAll('.sub-section');
+  btns.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      btns.forEach(function (b) { b.classList.remove('is-active'); b.setAttribute('aria-selected', 'false'); });
+      panels.forEach(function (p) { p.classList.remove('is-active'); });
+      btn.classList.add('is-active');
+      btn.setAttribute('aria-selected', 'true');
+      document.getElementById(btn.dataset.target).classList.add('is-active');
+    });
+  });
+})();
+</script>
+
+<script>
+window.addEventListener('message', function (e) {
+  if (!e.data || e.data.type !== 'emb-height') return;
+  var frames = document.querySelectorAll('.embed-frame');
+  frames.forEach(function (f) {
+    try { if (f.contentWindow === e.source) { f.style.height = (e.data.height + 20) + 'px'; } } catch (err) {}
+  });
+});
+</script>
+<script>
+/* ===== Dual-state affect canvas: User Affect (text/voice) vs Content Affect (image) ===== */
+window.EmoAffectDuo = (function () {
+  var primaryEmotion = document.getElementById('primaryEmotion');
+  var vaReadout = document.getElementById('vaReadout');
+  var vaHandle = document.getElementById('vaHandle');
+  var vaPlane = document.getElementById('vaPlane');
+  var vaLegend = document.getElementById('vaLegend');
+  var marker = document.getElementById('vaImageMarker');
+  var consistency = document.getElementById('affectConsistency');
+  var userEmotion = document.getElementById('userAffectEmotion');
+  var userVa = document.getElementById('userAffectVa');
+  var userDot = document.getElementById('userAffectDot');
+  var contentCard = document.getElementById('contentAffectCard');
+  var contentEmotion = document.getElementById('contentAffectEmotion');
+  var contentVa = document.getElementById('contentAffectVa');
+  var contentDot = document.getElementById('contentAffectDot');
+  var contentDetail = document.getElementById('contentAffectDetail');
+  var contentReflect = document.getElementById('contentAffectReflect');
+
+  var lastContent = null; // {v,a,color}
+
+  function fmt(n) { n = Number(n) || 0; return (n >= 0 ? '+' : '') + n.toFixed(2); }
+  function parseVa(text) {
+    var m = String(text || '').match(/[+-]?\d+(?:\.\d+)?/g) || [];
+    return { v: Number(m[0]) || 0, a: Number(m[1]) || 0 };
+  }
+  function plot(v, a) { return { x: ((v + 1) / 2) * 100, y: ((1 - a) / 2) * 100 }; }
+
+  function readUserAffect() {
+    var va = parseVa(vaReadout && vaReadout.textContent);
+    var color = vaHandle ? getComputedStyle(vaHandle).backgroundColor : '';
+    if (userEmotion) userEmotion.textContent = (primaryEmotion && primaryEmotion.textContent.trim()) || '不明确';
+    if (userVa) userVa.textContent = 'V ' + fmt(va.v) + ' · A ' + fmt(va.a);
+    if (userDot && color) userDot.style.background = color;
+    if (lastContent) refreshRelation({ v: va.v, a: va.a }, lastContent);
+    return va;
+  }
+
+  function describeRelation(u, c) {
+    var dv = c.v - u.v, da = c.a - u.a;
+    var dist = Math.sqrt(dv * dv + da * da);
+    var flip = (u.v > 0.15 && c.v < -0.15) || (u.v < -0.15 && c.v > 0.15);
+    if (flip) return { level: 'conflict', text: '⚠ 效价冲突：你与画面情绪正负相反' };
+    if (dist < 0.4) return { level: 'match', text: '✓ 一致：你与画面情绪相符' };
+    var parts = [];
+    if (Math.abs(da) > 0.3) parts.push(c.a > u.a ? '画面更高能量' : '画面更平静');
+    if (Math.abs(dv) > 0.3) parts.push(c.v > u.v ? '画面更积极' : '画面更消极');
+    if (!parts.length) return { level: 'mild', text: '基本一致' };
+    return { level: 'mild', text: '轻度差异：' + parts.join('、') };
+  }
+
+  function refreshRelation(u, c) {
+    if (!consistency) return;
+    var r = describeRelation(u, c);
+    consistency.textContent = r.text;
+    consistency.className = 'affect-consistency is-' + r.level;
+    consistency.hidden = false;
+  }
+
+  function setContent(analysis) {
+    if (!analysis) return;
+    var color = analysis.color || '#a855f7';
+    lastContent = { v: Number(analysis.valence) || 0, a: Number(analysis.arousal) || 0, color: color };
+
+    if (contentEmotion) contentEmotion.textContent = analysis.primary_emotion || analysis.description || '已分析';
+    if (contentVa) contentVa.textContent = 'V ' + fmt(lastContent.v) + ' · A ' + fmt(lastContent.a);
+    if (contentDot) contentDot.style.background = color;
+    if (contentDetail) {
+      var bits = [];
+      if (analysis.expressed_emotion) bits.push('人物表达：' + analysis.expressed_emotion);
+      if (analysis.evoked_emotion) bits.push('画面诱发：' + analysis.evoked_emotion);
+      contentDetail.textContent = bits.join('　·　');
+      contentDetail.hidden = !bits.length;
+    }
+    if (contentReflect) { contentReflect.textContent = analysis.reflection || ''; contentReflect.hidden = !analysis.reflection; }
+    if (contentCard) contentCard.hidden = false;
+
+    if (marker) {
+      var p = plot(lastContent.v, lastContent.a);
+      marker.style.left = p.x + '%';
+      marker.style.top = p.y + '%';
+      marker.style.background = color;
+      marker.hidden = false;
+    }
+    if (vaLegend) vaLegend.hidden = false;
+
+    refreshRelation(readUserAffect(), lastContent);
+  }
+
+  function clearContent() {
+    lastContent = null;
+    if (contentCard) contentCard.hidden = true;
+    if (marker) marker.hidden = true;
+    if (vaLegend) vaLegend.hidden = true;
+    if (consistency) consistency.hidden = true;
+  }
+
+  // Keep the User Affect card in sync as app.js updates the text emotion.
+  if (vaReadout || primaryEmotion) {
+    var obs = new MutationObserver(function () { readUserAffect(); });
+    [vaReadout, primaryEmotion].forEach(function (n) {
+      if (n) obs.observe(n, { childList: true, characterData: true, subtree: true });
+    });
+  }
+  document.addEventListener('DOMContentLoaded', readUserAffect);
+  setTimeout(readUserAffect, 300);
+
+  return { setContent: setContent, clearContent: clearContent, readUserAffect: readUserAffect };
+})();
+
+(function () {
+  var btn = document.getElementById('journalImageBtn');
+  var input = document.getElementById('journalImageInput');
+  var preview = document.getElementById('journalImagePreview');
+  if (!btn || !input) return;
+
+  window._journalImageAnalyses = [];
+
+  btn.addEventListener('click', function () { input.click(); });
+  input.addEventListener('change', function () {
+    Array.from(input.files).forEach(function (file) {
+      var reader = new FileReader();
+      reader.onload = function (e) {
+        var wrap = document.createElement('div');
+        wrap.className = 'image-preview-item';
+        wrap.style.cssText = 'position:relative;display:block;width:100%;max-width:100%;margin-bottom:10px;';
+        var img = document.createElement('img');
+        img.src = e.target.result;
+        img.style.cssText = 'width:100%;max-height:220px;border-radius:10px;object-fit:cover;display:block;';
+        var rm = document.createElement('button');
+        rm.textContent = '×';
+        rm.style.cssText = 'position:absolute;top:6px;right:6px;width:22px;height:22px;border-radius:50%;border:none;background:rgba(0,0,0,0.45);color:#fff;font-size:13px;line-height:1;cursor:pointer;padding:0;';
+        var caption = document.createElement('div');
+        caption.style.cssText = 'margin-top:5px;font-size:12px;line-height:1.3;color:#6b7280;';
+        // No loading text shown
+        rm.addEventListener('click', function () {
+          if (wrap._analysisData) {
+            window._journalImageAnalyses = window._journalImageAnalyses.filter(function(x) { return x !== wrap._analysisData; });
+            if (window._journalImageAnalyses.length === 0 && window.EmoAffectDuo) window.EmoAffectDuo.clearContent();
+            document.getElementById('journalCombinedEmotion') && (document.getElementById('journalCombinedEmotion').style.display = 'none');
+            var cac = document.getElementById('combinedAffectCard');
+            if (cac && window._journalImageAnalyses.length === 0) cac.hidden = true;
+          }
+          wrap.remove();
+        });
+        wrap.appendChild(img);
+        wrap.appendChild(rm);
+        wrap.appendChild(caption);
+        preview.appendChild(wrap);
+        var fd = new FormData();
+        fd.append('file', file);
+        fd.append('context', 'journal');
+        fetch('/api/uploads', { method: 'POST', body: fd })
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            if (!data || data.status !== 'success' || !data.analysis) { return; }
+            var a = data.analysis;
+            wrap._analysisData = a;
+            window._journalImageAnalyses.push(a);
+            caption.innerHTML = '';
+            if (a.color) {
+              var dot = document.createElement('span');
+              dot.style.cssText = 'display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:middle;background:' + a.color + ';';
+              caption.appendChild(dot);
+            }
+            caption.appendChild(document.createTextNode(a.primary_emotion || '已分析'));
+            if (window.EmoAffectDuo) window.EmoAffectDuo.setContent(a);
+            // Trigger combined analysis if text is present
+            var textEl = document.getElementById('journalText');
+            if (textEl && textEl.value.trim()) _triggerCombinedAnalysis(textEl.value.trim(), a);
+          })
+          .catch(function () {});
+      };
+      reader.readAsDataURL(file);
+    });
+    input.value = '';
+  });
+
+  function _triggerCombinedAnalysis(text, imageAnalysis) {
+    var combinedEl = document.getElementById('journalCombinedEmotion');
+    var labelEl = document.getElementById('journalCombinedLabel');
+    var dotEl = document.getElementById('journalCombinedDot');
+    // mirror pane card elements
+    var card = document.getElementById('combinedAffectCard');
+    var cardEmotion = document.getElementById('combinedAffectEmotion');
+    var cardVa = document.getElementById('combinedAffectVa');
+    var cardDot = document.getElementById('combinedAffectDot');
+    if (!combinedEl || !labelEl) return;
+    combinedEl.style.display = 'none';
+    if (card) card.hidden = true;
+    fetch('/api/analyze-combined', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: text, image_analysis: imageAnalysis })
+    })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (!data || !data.combined_emotion) return;
+        var c = data.combined_emotion;
+        var label = c.primary_emotion || c.label || '综合';
+        var color = c.color || '#8b5cf6';
+        // update editor-pane pill
+        if (dotEl) dotEl.style.background = color;
+        labelEl.textContent = label;
+        combinedEl.style.display = 'flex';
+        // update mirror-pane card
+        if (card) {
+          if (cardDot) cardDot.style.background = color;
+          if (cardEmotion) { cardEmotion.textContent = label; cardEmotion.style.color = color; }
+          if (cardVa && c.valence != null && c.arousal != null) {
+            cardVa.textContent = 'V ' + (c.valence >= 0 ? '+' : '') + c.valence.toFixed(2) +
+                                 ' · A ' + (c.arousal >= 0 ? '+' : '') + c.arousal.toFixed(2);
+          }
+          card.hidden = false;
+        }
+      })
+      .catch(function() {});
+  }
+
+  // Re-trigger combined analysis when text changes (debounced 800ms)
+  var _combinedDebounce = null;
+  var textArea = document.getElementById('journalText');
+  if (textArea) {
+    textArea.addEventListener('input', function() {
+      clearTimeout(_combinedDebounce);
+      _combinedDebounce = setTimeout(function() {
+        var analyses = window._journalImageAnalyses;
+        if (analyses && analyses.length > 0 && textArea.value.trim()) {
+          _triggerCombinedAnalysis(textArea.value.trim(), analyses[0]);
+        }
+      }, 800);
+    });
+  }
+})();
+</script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="/static/vaMapper.js?v=20260607a" defer></script>
+<script src="/static/i18n.js?v=20260607a"></script>
+<script src="/static/auth.js?v=20260607a"></script>
+<script src="/static/app.js?v=20260607b" defer></script>
+</body>
+</html>

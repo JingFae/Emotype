@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Color Mix Game</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      width: 100%; height: 100%;
+      overflow: hidden;
+      background: transparent;
+      font-family: sans-serif;
+    }
+    /* Background video: contain so yellow border shows completely */
+    #videoBg {
+      position: absolute; inset: 0;
+      width: 100%; height: 100%;
+      object-fit: contain;
+      z-index: 0;
+      background: transparent;
+    }
+    /* Overlay video: no box/shadow, blends with background, slightly larger for logo visibility */
+    #videoOverlayBox {
+      position: absolute;
+      left: 27%; top: 46%;
+      transform: translate(-50%, -50%);
+      width: min(310px, 44%);
+      aspect-ratio: 16/9;
+      background: transparent;
+      overflow: hidden;
+      border-radius: 4px;
+      z-index: 2;
+      user-select: none;
+      cursor: move;
+    }
+    #videoOverlayBox video {
+      width: 100%; height: 100%; object-fit: cover; pointer-events: none;
+    }
+    .resize-handle {
+      position: absolute; right: 0; bottom: 0;
+      width: 18px; height: 18px;
+      background: rgba(255,255,255,0.5);
+      cursor: se-resize; z-index: 5;
+      clip-path: polygon(100% 0, 100% 100%, 0 100%);
+      border-radius: 0 0 10px 0;
+    }
+    /* Canvas on top for blobs */
+    #gameCanvas {
+      position: absolute; inset: 0;
+      width: 100%; height: 100%;
+      z-index: 10;
+      pointer-events: auto;
+    }
+    /* Hint label */
+    #hint {
+      position: absolute; bottom: 12px; left: 50%;
+      transform: translateX(-50%);
+      z-index: 15;
+      background: rgba(255,255,255,0.75);
+      backdrop-filter: blur(6px);
+      border-radius: 999px;
+      padding: 6px 16px;
+      font-size: 12px; color: #555;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+  </style>
+</head>
+<body>
+
+<video id="videoBg" autoplay muted loop playsinline>
+  <source src="/static/game-bg.mp4" type="video/mp4" />
+</video>
+
+<div id="videoOverlayBox">
+  <video autoplay muted loop playsinline style="width:100%;height:100%;object-fit:cover;pointer-events:none;">
+    <source src="/static/game-main.mp4" type="video/mp4" />
+  </video>
+  <div class="resize-handle" id="resizeHandle"></div>
+</div>
+
+<canvas id="gameCanvas"></canvas>
+<div id="hint">拖动颜色球，让它们相撞融合 🎨</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx    = canvas.getContext('2d');
+const overlay = document.getElementById('videoOverlayBox');
+const resizeHandle = document.getElementById('resizeHandle');
+
+function resize() {
+  canvas.width  = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// — Colors —
+const BASE_COLORS = [
+  { r: 248, g: 44,  b: 18  },  // red
+  { r: 247, g: 207, b: 0   },  // yellow
+  { r: 13,  g: 145, b: 248 },  // blue
+];
+
+// — Crayon blob class —
+class CrayonBlob {
+  constructor(x, y, r, color, isSource = false) {
+    this.x = x; this.y = y;
+    this.baseR = r; this.r = r;
+    this.color = { ...color };
+    this.isSource = isSource;
+    this.vx = isSource ? 0 : (Math.random() - 0.5) * 0.3;
+    this.vy = isSource ? 0 : (Math.random() - 0.5) * 0.3;
+    this.scale = 1; this.targetScale = 1;
+    this.pts = Array.from({ length: 64 }, () => Math.random() * 10 - 5);
+  }
+
+  update(mx, my) {
+    if (this.isSource) {
+      this.targetScale = Math.hypot(this.x - mx, this.y - my) < this.baseR ? 1.28 : 1;
+      this.scale += (this.targetScale - this.scale) * 0.15;
+      this.r = this.baseR * this.scale;
+    } else {
+      this.x += this.vx; this.y += this.vy;
+    }
+  }
+
+  draw() {
+    const n = this.pts.length;
+    for (let layer = 0; layer < 4; layer++) {
+      ctx.fillStyle = `rgba(${this.color.r},${this.color.g},${this.color.b},${this.isSource ? 0.88 : 0.80})`;
+      ctx.beginPath();
+      for (let i = 0; i <= n; i++) {
+        const angle = (i / n) * Math.PI * 2;
+        const seed = this.pts[i % n];
+        const micro = Math.sin(i * 3.5) * 2 + Math.cos(i * 7.1) * 1.5;
+        const rad = this.r + seed * (1 + layer * 0.4) + micro;
+        const ox = (layer * 0.7 - 1) + (Math.random() * 0.5 - 0.25);
+        const oy = (layer * 0.7 - 1) + (Math.random() * 0.5 - 0.25);
+        const px = this.x + Math.cos(angle) * rad + ox;
+        const py = this.y + Math.sin(angle) * rad + oy;
+        i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+}
+
+// — Init source blobs (right 1/3 of canvas) —
+const blobs = [];
+function initBlobs() {
+  blobs.length = 0;
+  const W = canvas.width, H = canvas.height;
+  const blobR = 39; // fixed radius
+  BASE_COLORS.forEach((c, i) => {
+    const x = W * 0.65 + Math.random() * (W * 0.22);
+    const y = H * 0.18 + i * (H * 0.26) + Math.random() * (H * 0.07);
+    blobs.push(new CrayonBlob(x, y, blobR, c, true));
+  });
+}
+initBlobs();
+window.addEventListener('resize', () => { resize(); initBlobs(); });
+
+// — Color mixing —
+function mixColors(c1, c2) {
+  const near = (c, hex) => Math.hypot(c.r - parseInt(hex.slice(1,3),16), c.g - parseInt(hex.slice(3,5),16)) < 130;
+  if ((near(c1,'#f82c12') && near(c2,'#f7cf00')) || (near(c2,'#f82c12') && near(c1,'#f7cf00')))
+    return { r: 252, g: 120, b: 8 };   // orange
+  if ((near(c1,'#f7cf00') && near(c2,'#0d91f8')) || (near(c2,'#f7cf00') && near(c1,'#0d91f8')))
+    return { r: 50, g: 185, b: 70 };   // green
+  if ((near(c1,'#f82c12') && near(c2,'#0d91f8')) || (near(c2,'#f82c12') && near(c1,'#0d91f8')))
+    return { r: 135, g: 45, b: 175 };  // purple
+  return { r: Math.min(255,(c1.r+c2.r)/2), g: Math.min(255,(c1.g+c2.g)/2), b: Math.min(255,(c1.b+c2.b)/2) };
+}
+
+function checkMix() {
+  for (let i = blobs.length - 1; i >= 0; i--) {
+    for (let j = i - 1; j >= 0; j--) {
+      if (blobs[i].isSource && blobs[j].isSource) continue;
+      const d = Math.hypot(blobs[i].x - blobs[j].x, blobs[i].y - blobs[j].y);
+      if (d < (blobs[i].r + blobs[j].r) * 0.9) {
+        const mixed = mixColors(blobs[i].color, blobs[j].color);
+        if (blobs[i].isSource) {
+          blobs[j].color = mixed; blobs[j].r = Math.min(blobs[j].r + 5, 65); blobs.splice(i, 1);
+        } else if (blobs[j].isSource) {
+          blobs[i].color = mixed; blobs[i].r = Math.min(blobs[i].r + 5, 65); blobs.splice(j, 1);
+        } else {
+          blobs[j].color = mixed;
+          blobs[j].x = (blobs[i].x + blobs[j].x) / 2;
+          blobs[j].y = (blobs[i].y + blobs[j].y) / 2;
+          blobs[j].r = Math.min(blobs[j].r + blobs[i].r * 0.35, 85);
+          blobs.splice(i, 1);
+        }
+        return;
+      }
+    }
+  }
+}
+
+// — Drag: blobs and overlay video —
+let mx = 0, my = 0;
+let dragging = null;       // currently dragged blob copy
+let isDraggingBlob = false;
+
+let movingOverlay = false;
+let resizingOverlay = false;
+let ovStartX, ovStartY, ovStartW, ovStartH, ovStartL, ovStartT;
+
+function hitBlob(cx, cy) {
+  for (const b of blobs)
+    if (b.isSource && Math.hypot(b.x - cx, b.y - cy) < b.r) return b;
+  return null;
+}
+
+canvas.addEventListener('mousedown', e => {
+  mx = e.clientX; my = e.clientY;
+
+  // Blob drag
+  const hit = hitBlob(mx, my);
+  if (hit) {
+    isDraggingBlob = true;
+    dragging = new CrayonBlob(mx, my, 26, hit.color, false);
+    canvas.style.cursor = 'grabbing';
+    return;
+  }
+
+  // Overlay video: resize handle
+  const hr = resizeHandle.getBoundingClientRect();
+  if (mx >= hr.left && mx <= hr.right && my >= hr.top && my <= hr.bottom) {
+    resizingOverlay = true;
+    ovStartX = mx; ovStartY = my;
+    ovStartW = overlay.offsetWidth; ovStartH = overlay.offsetHeight;
+    return;
+  }
+
+  // Overlay video: move
+  const or = overlay.getBoundingClientRect();
+  if (mx >= or.left && mx <= or.right && my >= or.top && my <= or.bottom) {
+    movingOverlay = true;
+    // Remove initial transform
+    if (overlay.style.transform) {
+      overlay.style.left = or.left + 'px';
+      overlay.style.top  = or.top  + 'px';
+      overlay.style.transform = 'none';
+    }
+    ovStartX = mx; ovStartY = my;
+    ovStartL = overlay.offsetLeft; ovStartT = overlay.offsetTop;
+    canvas.style.cursor = 'move';
+  }
+});
+
+canvas.addEventListener('mousemove', e => {
+  mx = e.clientX; my = e.clientY;
+
+  if (isDraggingBlob && dragging) { dragging.x = mx; dragging.y = my; return; }
+
+  if (resizingOverlay) {
+    overlay.style.width  = Math.max(140, ovStartW + (mx - ovStartX)) + 'px';
+    overlay.style.height = Math.max(80,  ovStartH + (my - ovStartY)) + 'px';
+    return;
+  }
+
+  if (movingOverlay) {
+    overlay.style.left = (ovStartL + mx - ovStartX) + 'px';
+    overlay.style.top  = (ovStartT + my - ovStartY) + 'px';
+    return;
+  }
+
+  // Cursor hint
+  const hr = resizeHandle.getBoundingClientRect();
+  const or = overlay.getBoundingClientRect();
+  if (mx >= hr.left && mx <= hr.right && my >= hr.top && my <= hr.bottom)
+    canvas.style.cursor = 'se-resize';
+  else if (hitBlob(mx, my))
+    canvas.style.cursor = 'grab';
+  else if (mx >= or.left && mx <= or.right && my >= or.top && my <= or.bottom)
+    canvas.style.cursor = 'move';
+  else
+    canvas.style.cursor = 'default';
+});
+
+canvas.addEventListener('mouseup', () => {
+  if (isDraggingBlob && dragging) {
+    blobs.push(dragging);
+    checkMix();
+    dragging = null;
+    isDraggingBlob = false;
+  }
+  movingOverlay = resizingOverlay = false;
+  canvas.style.cursor = 'default';
+});
+
+// Touch support
+canvas.addEventListener('touchstart', e => {
+  const t = e.touches[0];
+  canvas.dispatchEvent(new MouseEvent('mousedown', { clientX: t.clientX, clientY: t.clientY }));
+}, { passive: true });
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  const t = e.touches[0];
+  canvas.dispatchEvent(new MouseEvent('mousemove', { clientX: t.clientX, clientY: t.clientY }));
+}, { passive: false });
+canvas.addEventListener('touchend', () => {
+  canvas.dispatchEvent(new MouseEvent('mouseup', {}));
+});
+
+// — Render loop —
+function animate() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  blobs.forEach(b => { b.update(mx, my); b.draw(); });
+  if (isDraggingBlob && dragging) { dragging.update(mx, my); dragging.draw(); }
+  requestAnimationFrame(animate);
+}
+animate();
+</script>
+</body>
+</html>
