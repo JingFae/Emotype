@@ -1,0 +1,207 @@
+/* ============================================
+   Login / Register Page
+   ============================================ */
+
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background:
+    radial-gradient(ellipse at 20% 20%, rgba(245,158,11,0.12) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 80%, rgba(143,210,221,0.10) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 50%, rgba(134,191,159,0.08) 0%, transparent 50%),
+    var(--cream);
+}
+
+.login-shell {
+  max-width: 100%;
+  width: 100%;
+}
+
+/* Card */
+.login-card {
+  width: 100%;
+  max-width: 440px;
+  margin: 0 auto;
+  padding: 40px 36px;
+  background: var(--cream-panel);
+  border: 1.5px solid rgba(160, 130, 80, 0.22);
+  border-radius: var(--card-r);
+  box-shadow: 3px 3px 0 rgba(245,158,11,0.14);
+}
+
+/* Brand */
+.login-card .brand-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 32px;
+}
+
+.login-card .brand-mark a {
+  display: flex;
+  align-items: center;
+}
+
+.login-card .brand-icon2 {
+  height: 40px;
+  width: auto;
+}
+
+.login-card .brand-name-img {
+  height: 24px;
+  width: auto;
+}
+
+/* Welcome text */
+.login-welcome {
+  text-align: center;
+  margin-bottom: 28px;
+}
+
+.login-welcome h1 {
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--ink);
+  margin: 0;
+}
+
+.login-welcome p {
+  font-size: 14px;
+  color: var(--muted);
+  margin: 6px 0 0;
+}
+
+/* Mode toggle */
+.mode-row {
+  display: flex;
+  gap: 0;
+  margin-bottom: 24px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1.5px solid rgba(160, 130, 80, 0.22);
+  background: var(--cream);
+}
+
+.mode-button {
+  flex: 1;
+  padding: 12px 0;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.25s;
+  font-family: inherit;
+}
+
+.mode-button.is-active {
+  background: var(--amber);
+  color: #fff;
+}
+
+.mode-button:hover:not(.is-active) {
+  background: var(--cream-warm);
+  color: var(--ink-warm);
+}
+
+/* Form */
+.login-form .participant-code-control {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-bottom: 16px;
+}
+
+.login-form .participant-code-control span {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-warm);
+}
+
+.login-form .participant-code-control input {
+  padding: 11px 14px;
+  border: 1.5px solid rgba(160, 130, 80, 0.22);
+  border-radius: 8px;
+  font-size: 15px;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  background: #fff;
+  font-family: inherit;
+}
+
+.login-form .participant-code-control input:focus {
+  border-color: var(--amber);
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.12);
+}
+
+.login-form .participant-code-control input::placeholder {
+  color: var(--muted-light);
+}
+
+.login-form .warm-btn {
+  width: 100%;
+  margin-top: 8px;
+  font-size: 15px;
+  padding: 12px 0;
+}
+
+/* Status message */
+.login-status {
+  text-align: center;
+  margin-top: 16px;
+  font-size: 14px;
+  min-height: 20px;
+  color: var(--muted);
+  transition: color 0.2s;
+}
+
+.login-status.error {
+  color: var(--red);
+}
+
+.login-status.success {
+  color: var(--green);
+}
+
+/* Hint link */
+.login-hint {
+  text-align: center;
+  margin-top: 24px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.login-hint a {
+  color: var(--amber-dark);
+  text-decoration: none;
+  font-weight: 600;
+  transition: color 0.2s;
+}
+
+.login-hint a:hover {
+  color: var(--ink);
+  text-decoration: underline;
+}
+
+/* Divider hint */
+.login-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 20px 0;
+  font-size: 12px;
+  color: var(--muted-light);
+}
+
+.login-divider::before,
+.login-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: rgba(160, 130, 80, 0.18);
+}

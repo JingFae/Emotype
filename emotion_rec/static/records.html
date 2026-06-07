@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>历史记录 | EmoBridge</title>
+  <link rel="stylesheet" href="/static/styles.css?v=20260607a" />
+  <link rel="stylesheet" href="/static/records.css?v=20260607a" />
+</head>
+<body class="records-page">
+<main class="app-shell records-shell">
+  <header class="topbar records-topbar">
+    <a class="brand-mark" href="/" aria-label="EmoBridge 首页">
+      <img class="brand-icon2" src="/static/icon2-only.png" alt="" aria-hidden="true" />
+      <img class="brand-name-img" src="/static/name-text.png" alt="emobridge" />
+    </a>
+
+    <nav class="view-tabs" aria-label="Primary navigation">
+      <a class="tab-button" href="/">首页</a>
+      <a class="tab-button" href="/essay">情绪随笔</a>
+      <a class="tab-button" href="/body-sensation">身体感受</a>
+      <a class="tab-button" href="/emo-echo">Emo 回响</a>
+      <a class="tab-button is-active" href="/historyreview" aria-current="page">历史回顾</a>
+    </nav>
+
+    <div class="topbar-right">
+    </div>
+  </header>
+
+  <section class="records-heading" aria-labelledby="recordsTitle">
+    <div>
+      <p class="eyebrow">My Records</p>
+      <h1 id="recordsTitle">我的历史记录</h1>
+      <p>这里仅读取已经保存过的随手记、正式日记和身体感受，不会在打开页面时调用模型。</p>
+    </div>
+    <div class="records-filters">
+      <label class="records-control" for="recordsStartDate">
+        <span>开始</span>
+        <input id="recordsStartDate" type="date" />
+      </label>
+      <label class="records-control" for="recordsEndDate">
+        <span>结束</span>
+        <input id="recordsEndDate" type="date" />
+      </label>
+      <label class="records-control" for="recordsSource">
+        <span>类型</span>
+        <select id="recordsSource">
+          <option value="all">全部</option>
+          <option value="journal">Journal 随手记</option>
+          <option value="diary">Diary 正式日记</option>
+          <option value="body_sensation">Body 身体感受</option>
+        </select>
+      </label>
+      <button class="warm-btn primary" type="button" id="recordsLoadBtn">查看记录</button>
+    </div>
+  </section>
+
+  <section class="records-summary-grid" aria-label="历史记录概览">
+    <article class="records-stat">
+      <span>总记录</span>
+      <strong id="recordsTotal">0</strong>
+      <small id="recordsState">载入中</small>
+    </article>
+    <article class="records-stat">
+      <span>随手记</span>
+      <strong id="recordsJournalCount">0</strong>
+      <small>Journal</small>
+    </article>
+    <article class="records-stat">
+      <span>正式日记</span>
+      <strong id="recordsDiaryCount">0</strong>
+      <small>Diary</small>
+    </article>
+    <article class="records-stat">
+      <span>身体感受</span>
+      <strong id="recordsBodyCount">0</strong>
+      <small>Body</small>
+    </article>
+  </section>
+
+  <section class="records-list-panel" aria-labelledby="recordsListTitle">
+    <div class="records-panel-head">
+      <div>
+        <p class="eyebrow" data-i18n="records.eyebrow">Timeline</p>
+        <h2 id="recordsListTitle">记录列表</h2>
+      </div>
+    </div>
+    <div class="records-list" id="recordsList"></div>
+  </section>
+</main>
+<script src="/static/records.js?v=20260607a" defer></script>
+<script src="/static/i18n.js?v=20260607a"></script>
+<script src="/static/auth.js?v=20260607a"></script>
+</body>
+</html>

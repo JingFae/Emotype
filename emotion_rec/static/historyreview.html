@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>历史回顾 | EmoBridge</title>
+  <link rel="stylesheet" href="/static/styles.css?v=20260607a" />
+  <link rel="stylesheet" href="/static/records.css?v=20260607a" />
+</head>
+<body class="records-page">
+
+<svg class="bg-decoration" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <filter id="blob-blur" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="48"/>
+    </filter>
+  </defs>
+  <g filter="url(#blob-blur)">
+    <ellipse cx="1340" cy="70"  rx="150" ry="95"  fill="#F77761" opacity="0.38" transform="rotate(-22 1340 70)"/>
+    <ellipse cx="110"  cy="140" rx="140" ry="85"  fill="#8FD2DD" opacity="0.35" transform="rotate(28 110 140)"/>
+    <ellipse cx="790"  cy="30"  rx="130" ry="58"  fill="#86BF9F" opacity="0.32" transform="rotate(-6 790 30)"/>
+  </g>
+</svg>
+
+<main class="app-shell records-shell">
+
+  <!-- TOPBAR -->
+  <header class="topbar records-topbar">
+    <a class="brand-mark" href="/" aria-label="EmoBridge 首页">
+      <img class="brand-icon2" src="/static/icon2-only.png" alt="" aria-hidden="true" />
+      <img class="brand-name-img" src="/static/name-text.png" alt="emobridge" />
+    </a>
+    <nav class="view-tabs" aria-label="Primary navigation">
+      <a class="tab-button" href="/" data-i18n="nav.home">首页</a>
+      <a class="tab-button" href="/essay" data-i18n="nav.essay">情绪随笔</a>
+      <a class="tab-button" href="/body-sensation" data-i18n="nav.body">身体感受</a>
+      <a class="tab-button" href="/emo-echo" data-i18n="nav.ecoEcho">Emo 回响</a>
+      <a class="tab-button is-active" href="/historyreview" aria-current="page" data-i18n="nav.historyReview">历史回顾</a>
+      <a class="tab-button" href="/profile" id="profileTab" style="display:none" data-i18n="nav.profile">个人信息</a>
+      <a class="tab-button" href="/login" id="authTab" data-i18n="nav.login">登录</a>
+    </nav>
+    <div class="topbar-right"></div>
+  </header>
+
+  <!-- SUB-TAB NAV -->
+  <div class="sub-tab-bar" role="tablist" aria-label="历史回顾栏目">
+    <button class="sub-tab-btn is-active" type="button" data-target="reviewPanel"  role="tab" aria-selected="true"  data-i18n="hr.tabReview">情绪回顾</button>
+    <button class="sub-tab-btn"           type="button" data-target="recordsPanel" role="tab" aria-selected="false" data-i18n="hr.tabRecords">历史记录</button>
+  </div>
+
+  <!-- ===== 情绪回顾 (review iframe) ===== -->
+  <div class="sub-section is-active" id="reviewPanel" role="tabpanel">
+    <iframe
+      id="reviewFrame"
+      class="embed-frame"
+      src="/review?embed=1"
+      title="情绪回顾"
+      loading="eager">
+    </iframe>
+  </div>
+
+  <!-- ===== 历史记录 (数据图表 + 记录列表) ===== -->
+  <div class="sub-section" id="recordsPanel" role="tabpanel">
+
+    <!-- 数据图表区 -->
+    <div style="margin-bottom:14px;">
+      <p class="eyebrow" data-i18n="hr.dataEyebrow">Data & Insights</p>
+      <h2 style="margin:2px 0 0;font-size:clamp(28px,3.5vw,48px);font-weight:900;" data-i18n="hr.dataTitle">情绪数据</h2>
+    </div>
+
+    <div class="data-chart-area">
+      <div class="warm-card">
+        <div class="section-head" style="margin-bottom:10px;">
+          <h3 style="font-size:17px;font-weight:800;" data-i18n="hr.emotionFreq">情绪频率分布</h3>
+          <button class="warm-btn ghost" type="button" id="refreshChartsBtn" style="font-size:12px;min-height:32px;padding:0 12px;" data-i18n="hr.refresh">刷新</button>
+        </div>
+        <div class="data-chart-wrap">
+          <canvas id="emotionChart"></canvas>
+          <div class="data-no-data" id="chartNoData" style="display:none;" data-i18n="hr.noData">暂无记录，先去写日记吧 ✏️</div>
+        </div>
+      </div>
+
+      <div class="warm-card blue">
+        <h3 style="font-size:17px;font-weight:800;margin-bottom:10px;" data-i18n="hr.vaHistory">V-A 坐标历史</h3>
+        <div class="data-chart-wrap">
+          <canvas id="vaChart"></canvas>
+          <div class="data-no-data" id="vaChartNoData" style="display:none;" data-i18n="hr.noData">暂无记录，先去写日记吧 ✏️</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="data-tools-row" style="margin-bottom:28px;">
+      <div class="warm-card" style="padding:16px;flex:1;">
+        <h3 style="font-size:14px;font-weight:800;margin-bottom:10px;" data-i18n="hr.summaryTitle">记录摘要</h3>
+        <div id="dataSummary" style="font-size:13px;color:var(--muted);line-height:1.8;"></div>
+      </div>
+      <div class="warm-card" style="padding:16px;flex:0 0 auto;min-width:200px;">
+        <h3 style="font-size:14px;font-weight:800;margin-bottom:10px;" data-i18n="hr.exportTitle">导出数据</h3>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <button class="warm-btn primary" type="button" id="hrExportJson" style="width:100%;" data-i18n="hr.exportJson">导出 JSON</button>
+          <button class="warm-btn ghost" type="button" id="hrExportCsv" style="width:100%;" data-i18n="hr.exportCsv">导出 CSV</button>
+          <button class="warm-btn red" type="button" id="hrClearAll" style="width:100%;margin-top:4px;" data-i18n="hr.clearAll">清除所有记录</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 历史记录列表 (原 records.html 内容) -->
+    <section class="records-heading" aria-labelledby="hrRecordsTitle" style="margin-top:0;">
+      <div>
+        <p class="eyebrow">Timeline</p>
+        <h2 id="hrRecordsTitle">历史记录</h2>
+        <p style="color:var(--muted);font-size:14px;margin:4px 0 0;">这里仅读取已经保存过的随手记、正式日记和身体感受，不会在打开页面时调用模型。</p>
+      </div>
+      <div class="records-filters">
+        <label class="records-control" for="recordsStartDate">
+          <span>开始</span>
+          <input id="recordsStartDate" type="date" />
+        </label>
+        <label class="records-control" for="recordsEndDate">
+          <span>结束</span>
+          <input id="recordsEndDate" type="date" />
+        </label>
+        <label class="records-control" for="recordsSource">
+          <span>类型</span>
+          <select id="recordsSource">
+            <option value="all">全部</option>
+            <option value="journal">Journal 随手记</option>
+            <option value="diary">Diary 正式日记</option>
+            <option value="body_sensation">Body 身体感受</option>
+          </select>
+        </label>
+        <button class="warm-btn primary" type="button" id="recordsLoadBtn">查看记录</button>
+      </div>
+    </section>
+
+    <section class="records-summary-grid" aria-label="历史记录概览">
+      <article class="records-stat">
+        <span>总记录</span>
+        <strong id="recordsTotal">0</strong>
+        <small id="recordsState">载入中</small>
+      </article>
+      <article class="records-stat">
+        <span>随手记</span>
+        <strong id="recordsJournalCount">0</strong>
+        <small>Journal</small>
+      </article>
+      <article class="records-stat">
+        <span>正式日记</span>
+        <strong id="recordsDiaryCount">0</strong>
+        <small>Diary</small>
+      </article>
+      <article class="records-stat">
+        <span>身体感受</span>
+        <strong id="recordsBodyCount">0</strong>
+        <small>Body</small>
+      </article>
+    </section>
+
+    <section class="records-list-panel" aria-labelledby="hrListTitle">
+      <div class="records-panel-head">
+        <div>
+          <p class="eyebrow">Timeline</p>
+          <h2 id="hrListTitle">记录列表</h2>
+        </div>
+      </div>
+      <div class="records-list" id="recordsList"></div>
+    </section>
+
+  </div><!-- end recordsPanel -->
+
+</main>
+
+<!-- Sub-tab switching -->
+<script>
+(function () {
+  var btns = document.querySelectorAll('.sub-tab-btn');
+  var panels = document.querySelectorAll('.sub-section');
+  btns.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      btns.forEach(function (b) { b.classList.remove('is-active'); b.setAttribute('aria-selected', 'false'); });
+      panels.forEach(function (p) { p.classList.remove('is-active'); });
+      btn.classList.add('is-active');
+      btn.setAttribute('aria-selected', 'true');
+      var target = document.getElementById(btn.dataset.target);
+      target.classList.add('is-active');
+      if (btn.dataset.target === 'recordsPanel') {
+        renderHistoryCharts();
+      }
+      if (btn.dataset.target === 'reviewPanel') {
+        var frame = document.getElementById('reviewFrame');
+        if (frame && frame.contentWindow) {
+          frame.contentWindow.postMessage({ type: 'emb-refresh' }, '*');
+        }
+      }
+    });
+  });
+})();
+</script>
+
+<!-- Standalone chart script (reads from localStorage, no dependency on app.js) -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+var _emotionChartInst = null;
+var _vaChartInst = null;
+
+function _hrEntries() {
+  try { return JSON.parse(localStorage.getItem('emomirror.entries') || '[]'); } catch (e) { return []; }
+}
+
+function renderHistoryCharts() {
+  var entries = _hrEntries();
+
+  // Emotion frequency bar chart
+  var eCanvas = document.getElementById('emotionChart');
+  var eNoData = document.getElementById('chartNoData');
+  if (eCanvas) {
+    if (!entries.length) {
+      eCanvas.style.display = 'none';
+      if (eNoData) eNoData.style.display = 'block';
+    } else {
+      eCanvas.style.display = 'block';
+      if (eNoData) eNoData.style.display = 'none';
+      var counts = {};
+      entries.forEach(function (e) { var l = e.label || '中性'; counts[l] = (counts[l] || 0) + 1; });
+      var sorted = Object.entries(counts).sort(function (a, b) { return b[1] - a[1]; }).slice(0, 12);
+      var COLORS = ['#F59E0B','#EF4444','#3B82F6','#10B981','#8B5CF6','#EC4899','#F97316','#06B6D4','#84CC16','#6366F1','#14B8A6','#F43F5E'];
+      if (_emotionChartInst) _emotionChartInst.destroy();
+      _emotionChartInst = new Chart(eCanvas, {
+        type: 'bar',
+        data: {
+          labels: sorted.map(function (x) { return x[0]; }),
+          datasets: [{ data: sorted.map(function (x) { return x[1]; }), backgroundColor: COLORS.slice(0, sorted.length), borderRadius: 8, borderSkipped: false }],
+        },
+        options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } }, x: { grid: { display: false } } } },
+      });
+    }
+  }
+
+  // V-A scatter chart
+  var vCanvas = document.getElementById('vaChart');
+  var vNoData = document.getElementById('vaChartNoData');
+  if (vCanvas) {
+    var valid = entries.filter(function (e) { return typeof e.valence === 'number' && typeof e.arousal === 'number'; });
+    if (!valid.length) {
+      vCanvas.style.display = 'none';
+      if (vNoData) vNoData.style.display = 'block';
+    } else {
+      vCanvas.style.display = 'block';
+      if (vNoData) vNoData.style.display = 'none';
+      if (_vaChartInst) _vaChartInst.destroy();
+      _vaChartInst = new Chart(vCanvas, {
+        type: 'scatter',
+        data: {
+          datasets: [{
+            label: '情绪坐标',
+            data: valid.map(function (e) { return { x: e.valence || 0, y: e.arousal || 0, label: e.label }; }),
+            backgroundColor: valid.map(function (e) { return e.color || '#F59E0B'; }),
+            pointRadius: 7, pointHoverRadius: 10,
+          }],
+        },
+        options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false } }, scales: { x: { min: -1, max: 1, title: { display: true, text: '效价 (Valence)' } }, y: { min: -1, max: 1, title: { display: true, text: '唤醒度 (Arousal)' } } } },
+      });
+    }
+  }
+
+  // Summary
+  var box = document.getElementById('dataSummary');
+  if (box) {
+    if (!entries.length) {
+      box.textContent = '暂无记录。';
+    } else {
+      var cnts = {};
+      entries.forEach(function (e) { var l = e.label || '中性'; cnts[l] = (cnts[l] || 0) + 1; });
+      var top = Object.entries(cnts).sort(function (a, b) { return b[1] - a[1]; }).slice(0, 3);
+      var avgV = entries.reduce(function (s, e) { return s + (e.valence || 0); }, 0) / entries.length;
+      var avgA = entries.reduce(function (s, e) { return s + (e.arousal || 0); }, 0) / entries.length;
+      box.innerHTML = '共 <b>' + entries.length + '</b> 条记录<br>平均效价: <b>' + avgV.toFixed(2) + '</b><br>平均唤醒度: <b>' + avgA.toFixed(2) + '</b><br>最常见情绪:<br>' + top.map(function (x) { return '&nbsp;&nbsp;' + x[0] + ' × ' + x[1]; }).join('<br>');
+    }
+  }
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+  // Refresh button
+  var refreshBtn = document.getElementById('refreshChartsBtn');
+  if (refreshBtn) refreshBtn.addEventListener('click', renderHistoryCharts);
+
+  // Clear all records
+  var clearBtn = document.getElementById('hrClearAll');
+  if (clearBtn) clearBtn.addEventListener('click', async function () {
+    if (!confirm('确定要清除所有记录吗？此操作不可撤销。')) return;
+    var code = participantCode() || 'local';
+    try { await fetch('/participants/' + encodeURIComponent(code) + '/all-data', { method: 'DELETE' }); } catch (e) {}
+    try {
+      localStorage.removeItem('emomirror.entries');
+      localStorage.removeItem('emomirror.participant');
+      localStorage.removeItem('emotype_participant_code');
+      localStorage.removeItem('participant_code');
+      localStorage.removeItem('participantCode');
+    } catch (e) {}
+    renderHistoryCharts();
+    // Reload the records list
+    var loadBtn = document.getElementById('recordsLoadBtn');
+    if (loadBtn) loadBtn.click();
+    // Refresh the embedded review iframe so stale cached report is cleared
+    var frame = document.getElementById('reviewFrame');
+    if (frame && frame.contentWindow) {
+      frame.contentWindow.postMessage({ type: 'emb-refresh' }, '*');
+    }
+  });
+
+  // Export buttons (localStorage entries only)
+  var jsonBtn = document.getElementById('hrExportJson');
+  if (jsonBtn) jsonBtn.addEventListener('click', function () {
+    var data = _hrEntries();
+    var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'emomirror-entries.json'; a.click();
+  });
+  var csvBtn = document.getElementById('hrExportCsv');
+  if (csvBtn) csvBtn.addEventListener('click', function () {
+    var entries = _hrEntries();
+    if (!entries.length) return;
+    var keys = ['date', 'label', 'valence', 'arousal', 'confidence', 'text'];
+    var rows = [keys.join(',')].concat(entries.map(function (e) {
+      return keys.map(function (k) { return '"' + String(e[k] || '').replace(/"/g, '""') + '"'; }).join(',');
+    }));
+    var blob = new Blob([rows.join('\n')], { type: 'text/csv' });
+    var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'emomirror-entries.csv'; a.click();
+  });
+});
+</script>
+
+<script src="/static/records.js?v=20260607a" defer></script>
+<script src="/static/i18n.js?v=20260607a"></script>
+<script src="/static/auth.js?v=20260607a"></script>
+<script>
+window.addEventListener('message', function (e) {
+  if (!e.data || e.data.type !== 'emb-height') return;
+  var frames = document.querySelectorAll('.embed-frame');
+  frames.forEach(function (f) {
+    try { if (f.contentWindow === e.source) { f.style.height = (e.data.height + 20) + 'px'; } } catch (err) {}
+  });
+});
+</script>
+</body>
+</html>

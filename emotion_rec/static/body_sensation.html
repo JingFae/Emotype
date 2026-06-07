@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>身体感受 | EmoBridge</title>
+  <link rel="stylesheet" href="/static/styles.css?v=20260607a" />
+  <link rel="stylesheet" href="/static/body_sensation.css?v=20260607a" />
+</head>
+<body class="body-sensation-page">
+
+<svg class="bg-decoration" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <filter id="blob-blur" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="48"/>
+    </filter>
+  </defs>
+  <g filter="url(#blob-blur)">
+    <ellipse cx="1340" cy="70"  rx="150" ry="95"  fill="#F77761" opacity="0.38" transform="rotate(-22 1340 70)"/>
+    <ellipse cx="55"   cy="580" rx="110" ry="160" fill="#F77761" opacity="0.30" transform="rotate(18 55 580)"/>
+    <ellipse cx="110"  cy="140" rx="140" ry="85"  fill="#8FD2DD" opacity="0.35" transform="rotate(28 110 140)"/>
+    <ellipse cx="790"  cy="30"  rx="130" ry="58"  fill="#86BF9F" opacity="0.32" transform="rotate(-6 790 30)"/>
+  </g>
+</svg>
+
+<main class="app-shell body-page-shell">
+  <header class="topbar body-topbar">
+    <a class="brand-mark" href="/" aria-label="EmoBridge 首页">
+      <img class="brand-icon2" src="/static/icon2-only.png" alt="" aria-hidden="true" />
+      <img class="brand-name-img" src="/static/name-text.png" alt="emobridge" />
+    </a>
+
+    <nav class="view-tabs" aria-label="Primary navigation">
+      <a class="tab-button" href="/" data-i18n="nav.home">首页</a>
+      <a class="tab-button" href="/essay" data-i18n="nav.essay">情绪随笔</a>
+      <a class="tab-button is-active" href="/body-sensation" aria-current="page" data-i18n="nav.body">身体感受</a>
+      <a class="tab-button" href="/emo-echo" data-i18n="nav.ecoEcho">Emo 回响</a>
+      <a class="tab-button" href="/historyreview" data-i18n="nav.historyReview">历史回顾</a>
+      <a class="tab-button" href="/profile" id="profileTab" style="display:none" data-i18n="nav.profile">个人信息</a>
+      <a class="tab-button" href="/login" id="authTab" data-i18n="nav.login">登录</a>
+    </nav>
+
+    <div class="topbar-right">
+    </div>
+  </header>
+
+  <section class="body-heading" aria-labelledby="bodyTitle">
+    <div>
+      <p class="eyebrow">Emotion & Body</p>
+      <h1 id="bodyTitle" data-i18n="body.title">身体感受</h1>
+      <p data-i18n="body.subtitle">选择身体部位和感受，系统会结合最近记录生成温和、非诊断式的缓解提示。</p>
+    </div>
+    <div class="body-heading-actions">
+      <button class="warm-btn ghost" type="button" id="bodyRefreshContextBtn" data-i18n="body.refreshContext">读取最近记录</button>
+    </div>
+  </section>
+
+  <section class="body-page-layout" aria-label="身体感受工作区">
+    <aside class="body-figure-panel" aria-labelledby="bodyFigureTitle">
+      <div class="body-panel-head">
+        <div>
+          <p class="eyebrow" data-i18n="body.mapEyebrow">Body Map</p>
+          <h2 id="bodyFigureTitle" data-i18n="body.mapTitle">身体部位</h2>
+        </div>
+        <span class="body-state-pill" id="bodyPairCount">0 组</span>
+      </div>
+      <div class="body-figure-wrap">
+        <img src="/static/people-body.svg" alt="身体部位示意图" />
+      </div>
+      <section class="body-selected-panel" aria-labelledby="selectedPairsTitle">
+        <div class="panel-label" id="selectedPairsTitle">已选组合</div>
+        <div class="body-selected-pairs-v2" id="bodySelectedPairs">暂无</div>
+      </section>
+    </aside>
+
+    <section class="body-input-column" aria-labelledby="bodyInputTitle">
+      <div class="body-card">
+        <div class="body-panel-head compact">
+          <div>
+            <p class="eyebrow" data-i18n="body.contextEyebrow">Context</p>
+            <h2 id="bodyInputTitle" data-i18n="body.contextTitle">当前记录参考</h2>
+          </div>
+          <span class="body-state-pill" id="bodyContextState">未读取</span>
+        </div>
+        <textarea id="bodyJournalText" placeholder="可以粘贴今天的随手记、正式日记片段，或留空让系统只根据本次身体感受生成建议。"></textarea>
+        <div class="body-context-list" id="bodyRecentContext"></div>
+      </div>
+
+      <div class="body-card">
+        <div class="body-panel-head compact">
+          <div>
+            <p class="eyebrow" data-i18n="body.regionEyebrow">Region</p>
+            <h2 data-i18n="body.regionTitle">选择部位</h2>
+          </div>
+        </div>
+        <div class="body-chip-grid" id="bodyRegionChips"></div>
+      </div>
+
+      <div class="body-card">
+        <div class="body-panel-head compact">
+          <div>
+            <p class="eyebrow" data-i18n="body.symptomEyebrow">Sensation</p>
+            <h2 data-i18n="body.symptomTitle">选择感受</h2>
+          </div>
+        </div>
+        <div class="body-chip-grid" id="bodySymptomChips"></div>
+      </div>
+
+      <div class="body-card">
+        <div class="body-detail-grid">
+          <label class="body-range-control" for="bodySeverity">
+            <span data-i18n="body.severity">程度</span>
+            <input id="bodySeverity" type="range" min="1" max="5" value="3" />
+            <strong id="bodySeverityLabel">3 / 5</strong>
+          </label>
+          <label class="body-text-control" for="bodyDuration">
+            <span data-i18n="body.duration">持续时间</span>
+            <input id="bodyDuration" type="text" value="下午开始" autocomplete="off" />
+          </label>
+        </div>
+        <label class="body-text-control body-free-text" for="bodyFreeText">
+          <span data-i18n="body.freeText">补充描述</span>
+          <textarea id="bodyFreeText" placeholder="例如：今天喝水较少、久坐、睡眠不足，或某个时段更明显。"></textarea>
+        </label>
+        <div class="body-actions">
+          <button class="warm-btn ghost" type="button" id="bodyAddPairBtn" data-i18n="body.addPair">加入组合</button>
+          <button class="warm-btn ghost" type="button" id="bodyClearPairsBtn" data-i18n="body.clearPairs">清空</button>
+          <button class="warm-btn red" type="button" id="bodySubmitBtn" data-i18n="body.generate">生成身体感受建议</button>
+        </div>
+        <p class="body-submit-status" id="bodySubmitStatus">系统会综合身体感受和最近记录。</p>
+      </div>
+    </section>
+
+    <aside class="body-advice-column">
+      <article class="body-advice-card" id="bodyAdviceCard" aria-labelledby="bodyAdviceTitle">
+        <div class="body-panel-head">
+          <div>
+            <p class="eyebrow" data-i18n="body.adviceEyebrow">Advice</p>
+            <h2 id="bodyAdviceTitle" data-i18n="body.adviceTitle">建议</h2>
+          </div>
+          <span class="body-state-pill" id="bodyAdviceState">待生成</span>
+        </div>
+        <div class="body-advice-empty" id="bodyAdviceEmpty">
+          <p>选择至少一个身体感受组合后生成建议。建议会保持温和、非诊断式，并保留必要的就医提醒。</p>
+        </div>
+        <div class="body-advice-content" id="bodyAdviceContent"></div>
+      </article>
+    </aside>
+  </section>
+</main>
+<script src="/static/body_sensation.js?v=20260607a" defer></script>
+<script src="/static/i18n.js?v=20260607a"></script>
+<script src="/static/auth.js?v=20260607a"></script>
+</body>
+</html>

@@ -1,0 +1,298 @@
+/* ============================================
+   Profile Page — Personal Info Management
+   ============================================ */
+
+.profile-shell {
+  max-width: 860px;
+  margin: 0 auto;
+}
+
+.profile-heading {
+  margin-bottom: 24px;
+}
+
+.profile-heading h1 {
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--ink);
+  margin: 4px 0 0;
+}
+
+/* ---- Info Card ---- */
+.profile-info-card {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 28px;
+  margin-bottom: 20px;
+}
+
+.profile-avatar {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--amber), #f59e0b88);
+  color: #fff;
+  font-size: 30px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 2px 12px rgba(245, 158, 11, 0.25);
+}
+
+.profile-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.profile-details h2 {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--ink);
+  margin: 0;
+}
+
+.profile-meta {
+  font-size: 13px;
+  color: var(--muted);
+  margin: 3px 0 8px;
+}
+
+.profile-role-badge .status-pill {
+  font-size: 12px;
+  padding: 3px 12px;
+  font-weight: 700;
+}
+
+/* ---- Settings Card ---- */
+.profile-settings-card {
+  padding: 28px;
+  margin-bottom: 20px;
+}
+
+.profile-settings-card .section-head {
+  margin-bottom: 20px;
+}
+
+.profile-settings-card .section-head h2 {
+  font-size: 18px;
+  font-weight: 800;
+  margin: 4px 0 0;
+  color: var(--ink);
+}
+
+.profile-settings-card form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.profile-settings-card .participant-code-control {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.profile-settings-card .participant-code-control span {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-warm);
+}
+
+.profile-settings-card .participant-code-control input {
+  padding: 11px 14px;
+  border: 1.5px solid rgba(160, 130, 80, 0.22);
+  border-radius: 8px;
+  font-size: 15px;
+  outline: none;
+  background: #fff;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  font-family: inherit;
+}
+
+.profile-settings-card .participant-code-control input:focus {
+  border-color: var(--amber);
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.12);
+}
+
+.profile-settings-card .participant-code-control select {
+  padding: 11px 14px;
+  border: 1.5px solid rgba(160, 130, 80, 0.22);
+  border-radius: 8px;
+  font-size: 15px;
+  outline: none;
+  background: #fff;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.profile-settings-card .participant-code-control select:focus {
+  border-color: var(--amber);
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.12);
+}
+
+/* Local mode toggle in settings */
+.privacy-toggle-setting {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.privacy-toggle-setting input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--amber);
+  cursor: pointer;
+  margin-top: 4px;
+}
+
+.privacy-toggle-setting small {
+  display: block;
+  line-height: 1.4;
+}
+
+.profile-settings-card .warm-btn {
+  align-self: flex-start;
+}
+
+/* ---- Links Card ---- */
+.profile-links-card {
+  padding: 28px;
+  margin-bottom: 20px;
+}
+
+.profile-links-card .section-head {
+  margin-bottom: 16px;
+}
+
+.profile-links-card .section-head h2 {
+  font-size: 18px;
+  font-weight: 800;
+  margin: 4px 0 0;
+  color: var(--ink);
+}
+
+.profile-link-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.profile-link-grid .warm-btn {
+  text-align: center;
+  font-size: 14px;
+  padding: 12px 8px;
+}
+
+/* ---- Status ---- */
+.profile-status {
+  margin-top: 12px;
+  font-size: 14px;
+  min-height: 20px;
+  color: var(--muted);
+}
+
+.profile-status.error { color: var(--red); }
+.profile-status.success { color: var(--green); }
+
+/* ---- Admin Section ---- */
+.profile-admin-card {
+  padding: 28px;
+  margin-bottom: 20px;
+  border-left: 4px solid var(--amber);
+}
+
+.profile-admin-card .section-head {
+  margin-bottom: 16px;
+}
+
+.profile-admin-card .section-head h2 {
+  font-size: 18px;
+  font-weight: 800;
+  margin: 4px 0 0;
+  color: var(--ink);
+}
+
+.admin-user-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.admin-user-table th,
+.admin-user-table td {
+  text-align: left;
+  padding: 10px 14px;
+  border-bottom: 1.5px solid rgba(160, 130, 80, 0.12);
+}
+
+.admin-user-table th {
+  font-weight: 700;
+  color: var(--ink-warm);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+.admin-user-table td {
+  color: var(--ink);
+}
+
+.admin-user-table .status-pill {
+  font-size: 11px;
+  padding: 2px 10px;
+}
+
+.admin-action-cell {
+  white-space: nowrap;
+}
+
+.admin-action-cell .warm-btn {
+  font-size: 12px;
+  padding: 4px 10px;
+  min-height: auto;
+  margin-right: 4px;
+}
+
+.admin-action-cell .warm-btn:last-child {
+  margin-right: 0;
+}
+
+/* Admin record viewer */
+.admin-record-view {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1.5px solid rgba(160, 130, 80, 0.18);
+}
+
+.admin-record-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.admin-record-header h3 {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--ink);
+  margin: 0;
+}
+
+.admin-record-header .warm-btn {
+  font-size: 13px;
+  padding: 6px 14px;
+}
+
+/* ---- Responsive ---- */
+@media (max-width: 640px) {
+  .profile-info-card {
+    flex-direction: column;
+    text-align: center;
+  }
+  .profile-link-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}

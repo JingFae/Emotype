@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Emo 回响 | EmoBridge</title>
+  <link rel="stylesheet" href="/static/styles.css?v=20260607a" />
+  <link rel="stylesheet" href="/static/emo_echo.css?v=20260607a" />
+</head>
+<body class="echo-page">
+
+<svg class="bg-decoration" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <filter id="blob-blur" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="48"/>
+    </filter>
+  </defs>
+  <g filter="url(#blob-blur)">
+    <ellipse cx="1340" cy="70"  rx="150" ry="95"  fill="#F77761" opacity="0.38" transform="rotate(-22 1340 70)"/>
+    <ellipse cx="55"   cy="580" rx="110" ry="160" fill="#F77761" opacity="0.30" transform="rotate(18 55 580)"/>
+    <ellipse cx="110"  cy="140" rx="140" ry="85"  fill="#8FD2DD" opacity="0.35" transform="rotate(28 110 140)"/>
+    <ellipse cx="790"  cy="30"  rx="130" ry="58"  fill="#86BF9F" opacity="0.32" transform="rotate(-6 790 30)"/>
+    <ellipse cx="400"  cy="800" rx="120" ry="70"  fill="#F59E0B" opacity="0.20" transform="rotate(10 400 800)"/>
+  </g>
+</svg>
+
+<main class="app-shell echo-shell">
+
+  <!-- TOPBAR -->
+  <header class="topbar echo-topbar">
+    <a class="brand-mark" href="/" aria-label="EmoBridge 首页">
+      <img class="brand-icon2" src="/static/icon2-only.png" alt="" aria-hidden="true" />
+      <img class="brand-name-img" src="/static/name-text.png" alt="emobridge" />
+    </a>
+    <nav class="view-tabs" aria-label="Primary navigation">
+      <a class="tab-button" href="/" data-i18n="nav.home">首页</a>
+      <a class="tab-button" href="/essay" data-i18n="nav.essay">情绪随笔</a>
+      <a class="tab-button" href="/body-sensation" data-i18n="nav.body">身体感受</a>
+      <a class="tab-button is-active" href="/emo-echo" aria-current="page" data-i18n="nav.ecoEcho">Emo 回响</a>
+      <a class="tab-button" href="/historyreview" data-i18n="nav.historyReview">历史回顾</a>
+      <a class="tab-button" href="/profile" id="profileTab" style="display:none" data-i18n="nav.profile">个人信息</a>
+      <a class="tab-button" href="/login" id="authTab" data-i18n="nav.login">登录</a>
+    </nav>
+    <div class="topbar-right"></div>
+  </header>
+
+  <!-- PAGE HEADING -->
+  <div class="echo-heading">
+    <div class="echo-heading-left">
+      <img class="echo-avatar-large" src="/static/icon_chatbox.png" alt="Emo 回响" />
+      <div>
+        <p class="eyebrow" data-i18n="echo.eyebrow">AI 情感伴侣</p>
+        <h1 data-i18n="echo.title">Emo 回响</h1>
+        <p class="echo-tagline" data-i18n="echo.tagline">心事诉说，情绪皆有回响</p>
+      </div>
+    </div>
+    <div class="echo-heading-actions">
+      <button class="warm-btn ghost" type="button" id="echoHistoryBtn" data-i18n="echo.historyBtn">历史记录</button>
+      <button class="warm-btn ghost echo-clear-btn" type="button" id="echoClearBtn" data-i18n="echo.clearBtn">新对话</button>
+    </div>
+  </div>
+
+  <!-- HISTORY PANEL -->
+  <div class="warm-card echo-history-panel" id="echoHistoryPanel" style="display:none">
+    <div class="echo-history-header">
+      <h3 data-i18n="echo.panelTitle">历史对话</h3>
+      <button class="warm-btn ghost" type="button" id="echoHistoryClose" data-i18n="echo.panelClose">关闭</button>
+    </div>
+    <div class="echo-session-list" id="echoSessionList">
+      <p class="echo-history-empty" data-i18n="echo.historyLoading">加载中…</p>
+    </div>
+  </div>
+
+  <!-- CHAT CARD -->
+  <div class="warm-card echo-card">
+
+    <!-- Messages area -->
+    <div class="echo-messages" id="echoMessages" role="log" aria-live="polite" aria-label="对话记录">
+      <!-- Welcome message injected by JS -->
+    </div>
+
+    <!-- Typing indicator -->
+    <div class="echo-typing" id="echoTyping" style="display:none" aria-label="正在回复">
+      <img class="echo-avatar-sm" src="/static/icon_chatbox.png" alt="" aria-hidden="true" />
+      <span class="echo-typing-dots"><span></span><span></span><span></span></span>
+    </div>
+
+    <!-- Input area -->
+    <div class="echo-input-row">
+      <textarea
+        id="echoInput"
+        class="echo-textarea"
+        placeholder="写下你想说的…（Enter 发送，Shift+Enter 换行）"
+        data-i18n-placeholder="echo.inputPh"
+        rows="1"
+        maxlength="1000"
+        aria-label="消息输入框"
+      ></textarea>
+      <button class="echo-send-btn" type="button" id="echoSendBtn" aria-label="发送">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="22" y1="2" x2="11" y2="13"></line>
+          <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+        </svg>
+      </button>
+    </div>
+    <p class="echo-disclaimer" data-i18n="echo.disclaimer">Emo 回响是情感陪伴助手，不提供心理诊断或医疗建议。</p>
+
+  </div>
+
+</main>
+
+<script src="/static/i18n.js?v=20260607a"></script>
+<script src="/static/auth.js?v=20260607a"></script>
+<script src="/static/emo_echo.js?v=20260607a"></script>
+</body>
+</html>

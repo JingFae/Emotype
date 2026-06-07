@@ -18,6 +18,11 @@ try:
 except ModuleNotFoundError:
     from va_mapper import EMOTION_LEXICON, clamp, split_text_segments  # type: ignore
 
+try:
+    from emotion_rec import llm_client
+except ModuleNotFoundError:
+    import llm_client  # type: ignore
+
 
 DEFAULT_TEXT_EMOTION_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 DEFAULT_TEXT_EMOTION_CLASSIFIER = "Johnson8187/Chinese-Emotion-Small"
@@ -26,9 +31,20 @@ DEFAULT_HEAD_PATH = Path(__file__).resolve().parent / "models" / "text_emotion_h
 TEXT_EMOTION_MODEL_NAME = os.getenv("TEXT_EMOTION_MODEL_NAME", DEFAULT_TEXT_EMOTION_MODEL)
 TEXT_EMOTION_CLASSIFIER_NAME = os.getenv("TEXT_EMOTION_CLASSIFIER_NAME", DEFAULT_TEXT_EMOTION_CLASSIFIER)
 TEXT_EMOTION_HEAD_PATH = Path(os.getenv("TEXT_EMOTION_HEAD_PATH", str(DEFAULT_HEAD_PATH)))
-TEXT_EMOTION_BACKEND = os.getenv("TEXT_EMOTION_BACKEND", "auto").lower()
+# Default to DeepSeek for text emotion, then fall back to classifier+rules.
+TEXT_EMOTION_BACKEND = os.getenv("TEXT_EMOTION_BACKEND", "deepseek").lower()
 TEXT_EMOTION_ALLOW_UNTRAINED_HEAD = os.getenv("TEXT_EMOTION_ALLOW_UNTRAINED_HEAD", "0") == "1"
 TEXT_EMOTION_LOCAL_FILES_ONLY = os.getenv("TEXT_EMOTION_LOCAL_FILES_ONLY", "0") == "1"
+TEXT_EMOTION_LLM_MODEL = os.getenv("TEXT_EMOTION_LLM_MODEL", "").strip() or None
+try:
+    TEXT_EMOTION_LLM_TEMPERATURE = float(os.getenv("TEXT_EMOTION_LLM_TEMPERATURE", "0.0"))
+except ValueError:
+    TEXT_EMOTION_LLM_TEMPERATURE = 0.0
+try:
+    TEXT_EMOTION_MAX_TOKENS = int(os.getenv("TEXT_EMOTION_MAX_TOKENS", "8192"))
+except ValueError:
+    TEXT_EMOTION_MAX_TOKENS = 8192
+LLM_TEXT_BACKENDS = {"deepseek", "llm", "openai"}
 
 CHINESE_EMOTION_LABELS = {
     0: "平淡語氣",
@@ -662,15 +678,159 @@ class TextEmotionAnalyzer:
         )
 
 
+# ---------------------------------------------------------------------------
+# DeepSeek text emotion backend.
+# ---------------------------------------------------------------------------
+
+TEXT_EMOTION_SYSTEM_PROMPT = """你是一位中英文双语的情绪分析专家，擅长识别日记/口语文本里的显性与隐性情绪。
+你的任务是对给定的若干文本片段，分别在 Valence-Arousal（效价-唤醒）二维情绪模型上打分，并给出标签和依据。
+
+维度定义：
+- valence（效价）：-1.0 到 1.0。-1 极度负面/痛苦，0 中性，1 极度正面/愉悦。
+- arousal（唤醒）：-1.0 到 1.0。-1 极度平静/低能量（疲惫、麻木、放松），0 中等，1 极度激动/高能量（愤怒、兴奋、惊恐）。
+- confidence（置信度）：0.0 到 1.0，表示你对该片段判断的把握。
+
+分析要求（务必关注隐性情绪，这是重点）：
+1. 识别隐性、压抑、反讽、口是心非的情绪。“没事/还好/我不在意/随便/算了”常是回避或压抑的负面情绪，不要判成中性或正面。
+2. 正确处理否定与转折：“不开心/不喜欢/并不轻松”应为负面；“虽然…但是…”以转折后的真实情绪为准。
+3. 关注身体化线索：胸闷、喘不过气、心慌、手抖、睡不着、胃疼、眼眶酸、没力气，通常对应焦虑、压力或悲伤。
+4. 关注关系与自我评价线索：被忽视、被否定、丢脸、自责、对不起、我不配，通常是负面（羞耻/委屈/低落）。
+5. 区分高唤醒负面（愤怒、焦虑、压力过载）与低唤醒负面（悲伤、孤独、疲惫、空虚）。
+6. 同样要识别积极情绪：开心、期待、被支持、放松、安心；其中放松/安心是正效价低唤醒。
+7. explicit_label 是表面/直接表达的情绪（如“开心”“愤怒”“中性”）；implicit_label 是更深层的真实情绪（如“压抑的愤怒”“委屈”“回避”“未明确”）。都用简体中文。
+8. evidence 给 1-3 条简短中文依据，指出你依据了哪些词或线索。
+
+只输出合法 JSON，不要输出解释文字、Markdown 或 <think>。"""
+
+
+def _build_text_emotion_user_prompt(segments: list[str]) -> str:
+    numbered = "\n".join(f"{index}. {segment}" for index, segment in enumerate(segments))
+    example = (
+        "{\n"
+        '  "segments": [\n'
+        '    {"index": 0, "valence": -0.45, "arousal": 0.65, "confidence": 0.8,\n'
+        '     "explicit_label": "中性", "implicit_label": "焦虑",\n'
+        '     "evidence": ["身体紧绷线索：胸闷", "回避式表达：没事"]}\n'
+        "  ]\n"
+        "}"
+    )
+    return (
+        "请分析下面带编号的文本片段，为每个片段返回一个 JSON 对象，按原编号顺序放进 segments 数组。\n"
+        "每个对象字段：index(整数，对应输入编号)、valence(-1~1)、arousal(-1~1)、confidence(0~1)、"
+        "explicit_label(简体中文)、implicit_label(简体中文)、evidence(中文字符串数组，1-3 条)。\n"
+        "必须为每一个输入片段都输出一个对象，数量与编号要和输入一致。\n\n"
+        f"输入片段：\n{numbered}\n\n"
+        f"输出 JSON 结构示例（仅示意结构，数值请按真实分析给出）：\n{example}"
+    )
+
+
+def _coerce_float(value: Any, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _segment_from_llm_item(segment_text: str, item: dict[str, Any]) -> SegmentEmotion:
+    evidence_raw = item.get("evidence", [])
+    if isinstance(evidence_raw, str):
+        evidence = [evidence_raw.strip()] if evidence_raw.strip() else []
+    elif isinstance(evidence_raw, list):
+        evidence = [str(value).strip() for value in evidence_raw if str(value).strip()][:3]
+    else:
+        evidence = []
+
+    return SegmentEmotion(
+        text=segment_text,
+        valence=clamp(_coerce_float(item.get("valence"))),
+        arousal=clamp(_coerce_float(item.get("arousal"))),
+        confidence=max(0.0, min(1.0, _coerce_float(item.get("confidence"), 0.6))),
+        explicit_label=(str(item.get("explicit_label") or "").strip() or "中性"),
+        implicit_label=(str(item.get("implicit_label") or "").strip() or "未明确"),
+        evidence=_unique(evidence or ["DeepSeek 语义情绪分析"]),
+        source="deepseek",
+    )
+
+
+def _analyze_with_llm(text: str) -> dict[str, Any] | None:
+    if not llm_client.llm_enabled():
+        return None
+
+    segments = split_text_segments(text)
+    if not segments:
+        return None
+
+    try:
+        parsed = llm_client.chat_json(
+            [
+                {"role": "system", "content": TEXT_EMOTION_SYSTEM_PROMPT},
+                {"role": "user", "content": _build_text_emotion_user_prompt(segments)},
+            ],
+            model=TEXT_EMOTION_LLM_MODEL,
+            temperature=TEXT_EMOTION_LLM_TEMPERATURE,
+            max_tokens=TEXT_EMOTION_MAX_TOKENS,
+        )
+    except Exception as exc:
+        print(f"[text_emotion] DeepSeek call failed, falling back to local: {exc}")
+        return None
+
+    if not isinstance(parsed, dict):
+        return None
+    items = parsed.get("segments")
+    if not isinstance(items, list) or not items:
+        return None
+
+    by_index: dict[int, dict[str, Any]] = {}
+    for position, item in enumerate(items):
+        if not isinstance(item, dict):
+            continue
+        try:
+            index = int(item.get("index", position))
+        except (TypeError, ValueError):
+            index = position
+        by_index.setdefault(index, item)
+
+    analyzed: list[dict[str, Any]] = []
+    matched = 0
+    for position, segment_text in enumerate(segments):
+        item = by_index.get(position)
+        if item is None and position < len(items) and isinstance(items[position], dict):
+            item = items[position]
+        if isinstance(item, dict):
+            matched += 1
+            analyzed.append(_segment_from_llm_item(segment_text, item).to_dict())
+        else:
+            analyzed.append(get_text_emotion_analyzer().analyze_segment(segment_text).to_dict())
+
+    if matched == 0:
+        return None
+
+    return {
+        "segments": analyzed,
+        "backend": "deepseek",
+        "model": TEXT_EMOTION_LLM_MODEL or llm_client.default_model(),
+        "model_error": None,
+        "model_errors": [],
+    }
+
+
 _ANALYZER: TextEmotionAnalyzer | None = None
+
+
+def _local_backend() -> str:
+    return "auto" if TEXT_EMOTION_BACKEND in LLM_TEXT_BACKENDS else TEXT_EMOTION_BACKEND
 
 
 def get_text_emotion_analyzer() -> TextEmotionAnalyzer:
     global _ANALYZER
     if _ANALYZER is None:
-        _ANALYZER = TextEmotionAnalyzer()
+        _ANALYZER = TextEmotionAnalyzer(backend=_local_backend())
     return _ANALYZER
 
 
 def analyze_text_emotion(text: str) -> dict[str, Any]:
+    if TEXT_EMOTION_BACKEND in LLM_TEXT_BACKENDS:
+        llm_result = _analyze_with_llm(text)
+        if llm_result is not None:
+            return llm_result
     return get_text_emotion_analyzer().analyze(text)
