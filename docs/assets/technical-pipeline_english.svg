@@ -1,0 +1,276 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1160" viewBox="0 0 1600 1160" role="img" aria-labelledby="title desc">
+  <title id="title">EmoBridge End-to-End Technical Pipeline</title>
+  <desc id="desc">An end-to-end view of user input flowing through the frontend, FastAPI, AI models, unified emotion mapping, persistence, and interactive outputs.</desc>
+
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#F8FAFF"/>
+      <stop offset="0.52" stop-color="#F7F4FF"/>
+      <stop offset="1" stop-color="#F4FBF8"/>
+    </linearGradient>
+    <linearGradient id="titleGradient" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#3157C8"/>
+      <stop offset="0.55" stop-color="#7656C8"/>
+      <stop offset="1" stop-color="#3B9277"/>
+    </linearGradient>
+    <linearGradient id="coreGradient" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#EEF3FF"/>
+      <stop offset="1" stop-color="#F3EEFF"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#56627A" flood-opacity="0.13"/>
+    </filter>
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="4" stdDeviation="7" flood-color="#68738A" flood-opacity="0.1"/>
+    </filter>
+    <marker id="arrowBlue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#5873C8"/>
+    </marker>
+    <marker id="arrowPurple" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#8066C2"/>
+    </marker>
+    <marker id="arrowGreen" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#3D9278"/>
+    </marker>
+    <style>
+      .font { font-family: Inter, Arial, "Microsoft YaHei", "Noto Sans CJK SC", sans-serif; }
+      .title { font-size: 38px; font-weight: 700; fill: #24324A; letter-spacing: 0.4px; }
+      .subtitle { font-size: 17px; font-weight: 450; fill: #68738A; }
+      .section-label { font-size: 15px; font-weight: 700; letter-spacing: 1.2px; }
+      .group-title { font-size: 23px; font-weight: 700; fill: #26344D; }
+      .group-sub { font-size: 12px; font-weight: 500; fill: #748097; }
+      .card-title { font-size: 14px; font-weight: 700; fill: #2D3A52; }
+      .card-text { font-size: 10px; font-weight: 500; fill: #647087; }
+      .chip-text { font-size: 12px; font-weight: 650; fill: #34425B; }
+      .tiny { font-size: 9.5px; font-weight: 600; fill: #778298; }
+      .flow-label { font-size: 12px; font-weight: 650; fill: #607092; }
+    </style>
+  </defs>
+
+  <rect width="1600" height="1160" fill="url(#bg)"/>
+  <circle cx="1460" cy="75" r="180" fill="#EAE5FF" opacity="0.38"/>
+  <circle cx="80" cy="1080" r="210" fill="#DFF4EC" opacity="0.42"/>
+
+  <g class="font">
+    <rect x="48" y="42" width="10" height="72" rx="5" fill="url(#titleGradient)"/>
+    <text x="78" y="76" class="title">EmoBridge</text>
+    <text x="292" y="76" class="title">End-to-End Technical</text>
+    <text x="686" y="76" class="title">Pipeline</text>
+    <text x="78" y="107" class="subtitle">Multimodal input flows through the Web UI, FastAPI, AI inference, and unified V-A mapping to create persistent, interactive feedback</text>
+
+    <!-- Input layer -->
+    <g filter="url(#softShadow)">
+      <rect x="70" y="148" width="1460" height="112" rx="24" fill="#FFFFFF" stroke="#DDE5F4" stroke-width="1.5"/>
+    </g>
+    <text x="100" y="177" class="section-label" fill="#4C6CC7">USER INPUT</text>
+
+    <g>
+      <rect x="100" y="194" width="190" height="43" rx="13" fill="#EEF3FF" stroke="#D3DFFF"/>
+      <circle cx="124" cy="215.5" r="9" fill="#5A78D0"/>
+      <text x="143" y="221" class="chip-text">Text / Journal</text>
+
+      <rect x="310" y="194" width="190" height="43" rx="13" fill="#EEF3FF" stroke="#D3DFFF"/>
+      <circle cx="334" cy="215.5" r="9" fill="#7390DE"/>
+      <text x="353" y="221" class="chip-text">Speech Input</text>
+
+      <rect x="520" y="194" width="190" height="43" rx="13" fill="#F2EEFF" stroke="#DED3FA"/>
+      <circle cx="544" cy="215.5" r="9" fill="#8569C8"/>
+      <text x="563" y="221" class="chip-text">Audio Upload</text>
+
+      <rect x="730" y="194" width="190" height="43" rx="13" fill="#FFF0F5" stroke="#F4D5E1"/>
+      <circle cx="754" cy="215.5" r="9" fill="#C96F96"/>
+      <text x="773" y="221" class="chip-text">Image</text>
+
+      <rect x="940" y="194" width="210" height="43" rx="13" fill="#EEF9F5" stroke="#CFEADF"/>
+      <circle cx="964" cy="215.5" r="9" fill="#4C9A80"/>
+      <text x="983" y="221" class="chip-text">Body Input</text>
+
+      <rect x="1170" y="194" width="260" height="43" rx="13" fill="#FFF7E9" stroke="#F2E0BB"/>
+      <circle cx="1194" cy="215.5" r="9" fill="#C99843"/>
+      <text x="1213" y="221" class="chip-text">Account / Emo Echo</text>
+    </g>
+
+    <!-- Main flow connector -->
+    <path d="M 800 260 L 800 292" fill="none" stroke="#5873C8" stroke-width="3" marker-end="url(#arrowBlue)"/>
+    <text x="818" y="282" class="flow-label">User events</text>
+
+    <!-- Frontend -->
+    <g filter="url(#shadow)">
+      <rect x="100" y="300" width="1400" height="132" rx="26" fill="#FFFFFF" stroke="#C9D7F6" stroke-width="1.7"/>
+      <rect x="100" y="300" width="180" height="132" rx="26" fill="#EAF1FF"/>
+      <rect x="254" y="300" width="26" height="132" fill="#EAF1FF"/>
+    </g>
+    <text x="132" y="340" class="section-label" fill="#4867BF">02 · Frontend</text>
+    <text x="132" y="372" class="group-title">Web UI</text>
+    <text x="132" y="398" class="group-sub">HTML · CSS · JS</text>
+
+    <g>
+      <rect x="320" y="328" width="180" height="76" rx="17" fill="#F6F8FF" stroke="#D8E1F6"/>
+      <text x="340" y="358" class="card-title">Emotion Note</text>
+      <text x="340" y="383" class="card-text">Input · Motion</text>
+
+      <rect x="520" y="328" width="180" height="76" rx="17" fill="#F8F5FF" stroke="#E2D8F6"/>
+      <text x="540" y="358" class="card-title">Journal</text>
+      <text x="540" y="383" class="card-text">Edit · Review</text>
+
+      <rect x="720" y="328" width="180" height="76" rx="17" fill="#F3FAF7" stroke="#D6EBE2"/>
+      <text x="740" y="358" class="card-title">Body Check-in</text>
+      <text x="740" y="383" class="card-text">Cues · Safety</text>
+
+      <rect x="920" y="328" width="180" height="76" rx="17" fill="#FFF6F9" stroke="#F0DAE3"/>
+      <text x="940" y="358" class="card-title">History</text>
+      <text x="940" y="383" class="card-text">Trends · Reports</text>
+
+      <rect x="1120" y="328" width="170" height="76" rx="17" fill="#FFF9EF" stroke="#F0E2C7"/>
+      <text x="1140" y="358" class="card-title">Emo Echo</text>
+      <text x="1140" y="383" class="card-text">Context chat</text>
+
+      <rect x="1310" y="328" width="150" height="76" rx="17" fill="#F5F7FA" stroke="#DFE4EC"/>
+      <text x="1330" y="358" class="card-title">Account</text>
+      <text x="1330" y="383" class="card-text">JWT · Profile</text>
+    </g>
+
+    <path d="M 800 432 L 800 466" fill="none" stroke="#5873C8" stroke-width="3" marker-end="url(#arrowBlue)"/>
+    <text x="818" y="455" class="flow-label">HTTP / JSON / multipart</text>
+
+    <!-- Backend -->
+    <g filter="url(#shadow)">
+      <rect x="100" y="474" width="970" height="140" rx="26" fill="url(#coreGradient)" stroke="#CFC8ED" stroke-width="1.7"/>
+    </g>
+    <text x="132" y="510" class="section-label" fill="#7258B7">03 · Backend API</text>
+    <text x="132" y="545" class="group-title">FastAPI · emotion_rec/app.py</text>
+    <text x="132" y="575" class="group-sub">Routing · Auth · Orchestration</text>
+
+    <g>
+      <rect x="500" y="504" width="150" height="78" rx="16" fill="#FFFFFF" stroke="#DCD5F2"/>
+      <text x="521" y="535" class="card-title">Pydantic</text>
+      <text x="521" y="560" class="card-text">Validation</text>
+
+      <rect x="670" y="504" width="150" height="78" rx="16" fill="#FFFFFF" stroke="#DCD5F2"/>
+      <text x="691" y="535" class="card-title">JWT Auth</text>
+      <text x="691" y="560" class="card-text">User · JWT</text>
+
+      <rect x="840" y="504" width="190" height="78" rx="16" fill="#FFFFFF" stroke="#DCD5F2"/>
+      <text x="861" y="535" class="card-title">participant scope</text>
+      <text x="861" y="560" class="card-text">Isolation · Admin</text>
+    </g>
+
+    <!-- Database -->
+    <g filter="url(#shadow)">
+      <rect x="1110" y="474" width="390" height="298" rx="26" fill="#F1FAF6" stroke="#C7E5D9" stroke-width="1.7"/>
+    </g>
+    <text x="1142" y="510" class="section-label" fill="#38856E">Database / Persistence</text>
+    <text x="1142" y="545" class="group-title">SQLAlchemy</text>
+    <text x="1142" y="574" class="group-sub">SQLite default / PostgreSQL</text>
+
+    <g>
+      <rect x="1142" y="600" width="150" height="58" rx="14" fill="#FFFFFF" stroke="#D4E9E0"/>
+      <text x="1160" y="626" class="card-title">Users</text>
+      <text x="1217" y="647" text-anchor="middle" class="tiny">users · settings</text>
+
+      <rect x="1310" y="600" width="158" height="58" rx="14" fill="#FFFFFF" stroke="#D4E9E0"/>
+      <text x="1328" y="626" class="card-title">Journals</text>
+      <text x="1389" y="647" text-anchor="middle" class="tiny">diaries · events</text>
+
+      <rect x="1142" y="674" width="150" height="58" rx="14" fill="#FFFFFF" stroke="#D4E9E0"/>
+      <text x="1160" y="700" class="card-title">Reports</text>
+      <text x="1217" y="721" text-anchor="middle" class="tiny">reports</text>
+
+      <rect x="1310" y="674" width="158" height="58" rx="14" fill="#FFFFFF" stroke="#D4E9E0"/>
+      <text x="1328" y="700" class="card-title">Echo</text>
+      <text x="1389" y="721" text-anchor="middle" class="tiny">echo sessions</text>
+    </g>
+
+    <path d="M 1070 544 L 1094 544" fill="none" stroke="#3D9278" stroke-width="3" marker-end="url(#arrowGreen)"/>
+    <path d="M 1094 574 L 1070 574" fill="none" stroke="#3D9278" stroke-width="2.4" marker-end="url(#arrowGreen)"/>
+    <text x="1078" y="530" class="flow-label">R/W</text>
+
+    <path d="M 585 614 L 585 650" fill="none" stroke="#8066C2" stroke-width="3" marker-end="url(#arrowPurple)"/>
+    <text x="603" y="638" class="flow-label">Task orchestration</text>
+
+    <!-- AI / Model -->
+    <g filter="url(#shadow)">
+      <rect x="100" y="658" width="970" height="268" rx="26" fill="#FFFFFF" stroke="#D9DFF0" stroke-width="1.7"/>
+    </g>
+    <text x="132" y="696" class="section-label" fill="#6D60B7">04 · AI / Model &amp; Data Processing</text>
+
+    <g>
+      <rect x="132" y="722" width="206" height="142" rx="19" fill="#EEF3FF" stroke="#CFDCFA"/>
+      <rect x="151" y="741" width="44" height="44" rx="13" fill="#5C78CE"/>
+      <text x="173" y="770" text-anchor="middle" font-size="18" font-weight="750" fill="#FFFFFF">T</text>
+      <text x="210" y="758" class="card-title">Text</text>
+      <text x="151" y="807" class="card-text">DeepSeek / HF</text>
+      <text x="151" y="831" class="card-text">Rules fallback</text>
+      <text x="151" y="852" class="tiny">Labels · V-A</text>
+
+      <rect x="358" y="722" width="206" height="142" rx="19" fill="#F1EEFF" stroke="#DBD2F6"/>
+      <rect x="377" y="741" width="44" height="44" rx="13" fill="#8064C0"/>
+      <text x="399" y="770" text-anchor="middle" font-size="18" font-weight="750" fill="#FFFFFF">A</text>
+      <text x="436" y="758" class="card-title">Speech</text>
+      <text x="377" y="807" class="card-text">Wav2Vec2 VAD</text>
+      <text x="377" y="831" class="card-text">pydub · ffmpeg</text>
+      <text x="377" y="852" class="tiny">A-D-V · Acoustics</text>
+
+      <rect x="584" y="722" width="206" height="142" rx="19" fill="#EEF9F5" stroke="#CDE9DE"/>
+      <rect x="603" y="741" width="44" height="44" rx="13" fill="#46967C"/>
+      <text x="625" y="770" text-anchor="middle" font-size="18" font-weight="750" fill="#FFFFFF">V</text>
+      <text x="662" y="758" class="card-title">Image</text>
+      <text x="603" y="807" class="card-text">Gemini VLM</text>
+      <text x="603" y="831" class="card-text">Visual V-A</text>
+      <text x="603" y="852" class="tiny">Person / Scene</text>
+
+      <rect x="810" y="722" width="228" height="142" rx="19" fill="#FFF2F6" stroke="#F0D3DE"/>
+      <rect x="829" y="741" width="44" height="44" rx="13" fill="#C66C91"/>
+      <text x="851" y="770" text-anchor="middle" font-size="18" font-weight="750" fill="#FFFFFF">G</text>
+      <text x="888" y="758" class="card-title">Generation</text>
+      <text x="829" y="807" class="card-text">Typography map</text>
+      <text x="829" y="831" class="card-text">Journal · Body</text>
+      <text x="829" y="852" class="tiny">Echo · fallback</text>
+    </g>
+
+    <rect x="132" y="879" width="906" height="27" rx="13.5" fill="#F7F8FC" stroke="#D9DEEA" stroke-dasharray="6 5"/>
+    <text x="585" y="898" text-anchor="middle" class="tiny">Fallback: rules, V-A mapping, guidance, and character styles remain available</text>
+
+    <path d="M 585 926 L 585 957" fill="none" stroke="#8066C2" stroke-width="3" marker-end="url(#arrowPurple)"/>
+
+    <!-- Unified representation and output -->
+    <g filter="url(#shadow)">
+      <rect x="100" y="964" width="590" height="118" rx="25" fill="#EEF1FF" stroke="#CCD5F2" stroke-width="1.7"/>
+      <rect x="720" y="964" width="780" height="118" rx="25" fill="#FFFFFF" stroke="#D8E2EE" stroke-width="1.7"/>
+    </g>
+    <text x="132" y="998" class="section-label" fill="#5B67B2">UNIFIED EMOTION REPRESENTATION</text>
+    <text x="132" y="1031" class="group-title">Valence-Arousal</text>
+    <text x="132" y="1059" class="group-sub">Labels · Colors · Segments · Character map</text>
+
+    <path d="M 690 1023 L 706 1023" fill="none" stroke="#5873C8" stroke-width="3" marker-end="url(#arrowBlue)"/>
+
+    <text x="752" y="998" class="section-label" fill="#3B8A73">INTERACTIVE OUTPUTS</text>
+    <g>
+      <rect x="752" y="1014" width="130" height="43" rx="13" fill="#EEF3FF"/>
+      <text x="817" y="1041" text-anchor="middle" class="chip-text">Kinetic Type</text>
+      <rect x="896" y="1014" width="130" height="43" rx="13" fill="#F2EEFF"/>
+      <text x="961" y="1041" text-anchor="middle" class="chip-text">V-A Map</text>
+      <rect x="1040" y="1014" width="130" height="43" rx="13" fill="#EEF9F5"/>
+      <text x="1105" y="1041" text-anchor="middle" class="chip-text">Body Tips</text>
+      <rect x="1184" y="1014" width="130" height="43" rx="13" fill="#FFF2F6"/>
+      <text x="1249" y="1041" text-anchor="middle" class="chip-text">Review</text>
+      <rect x="1328" y="1014" width="140" height="43" rx="13" fill="#FFF8EA"/>
+      <text x="1398" y="1041" text-anchor="middle" class="chip-text">History</text>
+    </g>
+
+    <!-- Data feedback arrow -->
+    <path d="M 1305 772 C 1305 838, 1260 900, 1110 940" fill="none" stroke="#3D9278" stroke-width="2.6" stroke-dasharray="7 6" marker-end="url(#arrowGreen)"/>
+    <text x="1272" y="874" class="flow-label" fill="#3D9278">History context</text>
+    <path d="M 1480 1080 C 1515 1102, 1510 1122, 1450 1122 L 210 1122 C 145 1122, 105 1102, 120 1082" fill="none" stroke="#C27A9A" stroke-width="2.3" stroke-dasharray="7 6" marker-end="url(#arrowPurple)"/>
+    <text x="790" y="1143" text-anchor="middle" class="flow-label">User corrects labels / V-A → final feeling is saved → future review gains context</text>
+
+    <!-- Deployment ribbon -->
+    <g transform="translate(1110 790)">
+      <rect x="0" y="0" width="390" height="136" rx="24" fill="#FFF8EC" stroke="#ECD9B8" stroke-width="1.7" filter="url(#softShadow)"/>
+      <text x="32" y="38" class="section-label" fill="#A7742F">Deployment</text>
+      <text x="32" y="69" class="card-title">Local Python · Docker · Render</text>
+      <text x="32" y="96" class="card-text">Env vars · Local model · External API key</text>
+      <text x="32" y="119" class="tiny">One service · Web UI / API</text>
+    </g>
+  </g>
+</svg>
