@@ -113,6 +113,7 @@
       "body.regionEyebrow": "Region", "body.regionTitle": "选择部位",
       "body.symptomEyebrow": "Sensation", "body.symptomTitle": "选择感受",
       "body.severity": "程度", "body.duration": "持续时间",
+      "body.durationDefault": "下午开始",
       "body.freeText": "补充描述",
       "body.freeTextPh": "例如：今天喝水较少、久坐、睡眠不足，或某个时段更明显。",
       "body.addPair": "加入组合", "body.clearPairs": "清空",
@@ -121,6 +122,29 @@
       "body.adviceEyebrow": "Advice", "body.adviceTitle": "建议",
       "body.advicePending": "待生成",
       "body.adviceEmpty": "选择至少一个身体感受组合后生成建议。建议会保持温和、非诊断式，并保留必要的就医提醒。",
+      "body.loading": "读取中",
+      "body.loadedRecords": "已读取 {count} 条",
+      "body.loadFailed": "读取失败",
+      "body.noRecentContext": "没有读取到最近随手记。仍然可以只根据本次身体感受生成建议。",
+      "body.recordFallback": "记录",
+      "body.pairUnit": "组",
+      "body.noDuration": "未填写持续时间",
+      "body.delete": "删除",
+      "body.generated": "已生成",
+      "body.generating": "生成中",
+      "body.generateWait": "正在生成建议，可能需要几秒。",
+      "body.generatedStatus": "建议已生成。来源：{source}",
+      "body.generateFailed": "生成失败",
+      "body.requestFailed": "请求失败：{message}",
+      "body.adviceGenerated": "建议已生成。",
+      "body.emotionClue": "情绪线索",
+      "body.source": "来源",
+      "body.bodyEmotionLinks": "身体-情绪线索",
+      "body.stepsToTry": "可尝试步骤",
+      "body.reflectionPrompt": "继续记录提示",
+      "body.riskWarning": "风险提示",
+      "body.note": "说明",
+      "body.nonMedicalNote": "这些建议不构成医疗诊断；如果症状明显、持续或让你担心，请优先寻求专业帮助。",
     },
     en: {
       // Navigation (all pages)
@@ -228,6 +252,7 @@
       "body.regionEyebrow": "Region", "body.regionTitle": "Select Region",
       "body.symptomEyebrow": "Sensation", "body.symptomTitle": "Select Sensation",
       "body.severity": "Severity", "body.duration": "Duration",
+      "body.durationDefault": "Started this afternoon",
       "body.freeText": "Additional notes",
       "body.freeTextPh": "e.g., drank little water today, sat for a long time, poor sleep, or more noticeable at certain times.",
       "body.addPair": "Add pair", "body.clearPairs": "Clear",
@@ -236,6 +261,29 @@
       "body.adviceEyebrow": "Advice", "body.adviceTitle": "Advice",
       "body.advicePending": "Pending",
       "body.adviceEmpty": "Select at least one body sensation pair to generate advice. Advice remains gentle, non-diagnostic, and includes necessary medical reminders.",
+      "body.loading": "Loading",
+      "body.loadedRecords": "Loaded {count} records",
+      "body.loadFailed": "Load failed",
+      "body.noRecentContext": "No recent journal entries were loaded. You can still generate advice from this body sensation only.",
+      "body.recordFallback": "Record",
+      "body.pairUnit": "pairs",
+      "body.noDuration": "No duration entered",
+      "body.delete": "Delete",
+      "body.generated": "Generated",
+      "body.generating": "Generating",
+      "body.generateWait": "Generating advice. This may take a few seconds.",
+      "body.generatedStatus": "Advice generated. Source: {source}",
+      "body.generateFailed": "Failed",
+      "body.requestFailed": "Request failed: {message}",
+      "body.adviceGenerated": "Advice generated.",
+      "body.emotionClue": "Emotion clue",
+      "body.source": "Source",
+      "body.bodyEmotionLinks": "Body-emotion links",
+      "body.stepsToTry": "Steps to try",
+      "body.reflectionPrompt": "Reflection prompt",
+      "body.riskWarning": "Risk warning",
+      "body.note": "Note",
+      "body.nonMedicalNote": "These suggestions are not a medical diagnosis. If symptoms are strong, persistent, or worrying, seek professional help first.",
     }
   };
 
@@ -258,6 +306,10 @@
     document.querySelectorAll("[data-i18n-placeholder]").forEach(function (el) {
       var key = el.getAttribute("data-i18n-placeholder");
       if (key) el.placeholder = t(key);
+    });
+    document.querySelectorAll("[data-i18n-value]").forEach(function (el) {
+      var key = el.getAttribute("data-i18n-value");
+      if (key) el.value = t(key);
     });
   }
 

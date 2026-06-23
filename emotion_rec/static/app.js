@@ -40,6 +40,125 @@ const palette = {
   mauve: "#BEAACF",
 };
 
+const EMOTION_LABEL_EN = {
+  "暴怒": "Rage",
+  "烦躁": "Irritated",
+  "紧绷": "Tense",
+  "目瞪口呆": "Stunned",
+  "很生气": "Very angry",
+  "狂怒": "Fury",
+  "懊恼": "Frustrated",
+  "紧张": "Nervous",
+  "坐立不安": "Restless",
+  "愤怒": "Angry",
+  "害怕": "Afraid",
+  "恐惧": "Fear",
+  "生气": "Mad",
+  "焦虑": "Anxious",
+  "忧虑": "Worried",
+  "担心": "Concerned",
+  "憎恶": "Disgusted",
+  "厌恶": "Disgusted",
+  "恼火": "Annoyed",
+  "不耐烦": "Impatient",
+  "不安": "Uneasy",
+  "不高兴": "Unhappy",
+  "惊讶": "Surprised",
+  "乐观": "Optimistic",
+  "激动人心": "Thrilled",
+  "狂喜": "Ecstatic",
+  "兴奋": "Excited",
+  "欢快": "Cheerful",
+  "积极": "Positive",
+  "兴高采烈": "Elated",
+  "精力充沛": "Energetic",
+  "活跃": "Active",
+  "热情": "Enthusiastic",
+  "激动": "Excited",
+  "满意的": "Pleased",
+  "开心": "Happy",
+  "高兴": "Happy",
+  "专注": "Focused",
+  "自豪": "Proud",
+  "愉快": "Joyful",
+  "快乐": "Joy",
+  "满怀希望": "Hopeful",
+  "幸福": "Happy",
+  "闷闷不乐": "Gloomy",
+  "失望": "Disappointed",
+  "低落": "Low",
+  "冷漠": "Detached",
+  "消极": "Negative",
+  "忧郁": "Melancholy",
+  "挫败": "Defeated",
+  "悲伤": "Sad",
+  "无聊": "Bored",
+  "疏离": "Alienated",
+  "孤独": "Lonely",
+  "疲惫": "Tired",
+  "沮丧": "Downhearted",
+  "抑郁": "Depressed",
+  "耗尽": "Drained",
+  "厌倦": "Weary",
+  "绝望": "Hopeless",
+  "凄凉": "Desolate",
+  "精疲力竭": "Exhausted",
+  "安逸": "At ease",
+  "悠闲": "Leisurely",
+  "满足": "Satisfied",
+  "爱意": "Affection",
+  "自信感": "Confident",
+  "冷静": "Calm",
+  "安全": "Safe",
+  "满意": "Content",
+  "感恩": "Grateful",
+  "有成就感": "Accomplished",
+  "放松": "Relaxed",
+  "松弛": "Loose",
+  "安宁": "Peaceful",
+  "平衡": "Balanced",
+  "自在": "Comfortable",
+  "平静": "Calm",
+  "舒适": "Comfortable",
+  "无忧无虑": "Carefree",
+  "惬意": "Cozy",
+  "安详": "Serene",
+  "中性": "Neutral",
+  "复杂情绪": "Mixed emotions",
+  "不明确": "Unclear",
+  "未明确": "Unclear",
+  "身体不适": "Physical discomfort",
+  "警觉": "Alert",
+  "纠结": "Torn",
+  "压力过载": "Overloaded",
+  "回避": "Avoidant",
+  "否认式表达": "Denial",
+  "身体紧绷": "Body tension",
+  "不满": "Dissatisfied",
+  "羞耻": "Shame",
+  "羞愧": "Ashamed",
+  "委屈": "Hurt",
+  "压抑": "Suppressed",
+  "慌张": "Panicked",
+  "平淡": "Neutral",
+  "自责": "Self-blame",
+};
+
+function uiText(zh, en) {
+  return currentLang === "zh" ? zh : en;
+}
+
+function displayEmotionLabel(label) {
+  const text = String(label || "");
+  if (currentLang !== "en" || !text) return text;
+  const direct = EMOTION_LABEL_EN[text.trim()];
+  if (direct) return direct;
+  return text.split(/(\/|／|、|，|,|·|\s+\+\s+)/g).map((part) => {
+    const trimmed = part.trim();
+    return EMOTION_LABEL_EN[trimmed] || part;
+  }).join("");
+}
+
 let entries = JSON.parse(localStorage.getItem("emomirror.entries") || "[]");
 let selectedLabel = "";
 let analyzeTimer = null;
@@ -733,7 +852,7 @@ function applyManualMapping(mapping = {}, options = {}) {
 
   currentOverallMapping = next;
   selectedLabel = next.label;
-  primaryEmotion.textContent = selectedLabel;
+  primaryEmotion.textContent = displayEmotionLabel(selectedLabel);
   reflectionText.textContent = reflectionFor(next);
   confidenceMeter.style.width = `${Math.round((next.confidence || 0) * 100)}%`;
   emotionDot.style.background = next.color || palette.mauve;
@@ -780,7 +899,7 @@ function applyAnalysis(payload) {
   currentVAMapping = vaMapping;
   currentCandidates = buildEmotionCandidates(payload, overall, vaMapping);
   selectedLabel = emotion.primary;
-  primaryEmotion.textContent = selectedLabel;
+  primaryEmotion.textContent = displayEmotionLabel(selectedLabel);
   reflectionText.textContent = emotion.reflection;
   confidenceMeter.style.width = `${Math.round((emotion.confidence || 0) * 100)}%`;
   emotionDot.style.background = emotion.color || palette.mauve;
@@ -809,7 +928,7 @@ function renderChips(activeLabel) {
     const button = document.createElement("button");
     button.className = `emotion-chip ${candidate.label === activeLabel ? "is-active" : ""}`;
     button.type = "button";
-    button.textContent = candidate.label;
+    button.textContent = displayEmotionLabel(candidate.label);
     button.style.setProperty("--chip-color", candidate.color || vaMapper().NEUTRAL_COLOR);
     button.title = `V ${formatSigned(candidate.valence)} · A ${formatSigned(candidate.arousal)}`;
     button.addEventListener("click", () => {
@@ -894,9 +1013,9 @@ function renderHome() {
 
   if (entries.length) {
     const latest = entries[0];
-    latestEmotion.textContent = latest.label;
+    latestEmotion.textContent = displayEmotionLabel(latest.label);
     latestConfidence.textContent = `${latest.confidence}% confidence`;
-    if (homeMirrorWord)    homeMirrorWord.textContent    = latest.label.split("/")[0].trim().toLowerCase();
+    if (homeMirrorWord)    homeMirrorWord.textContent    = displayEmotionLabel(latest.label).split("/")[0].trim().toLowerCase();
     if (homeMirrorCaption) homeMirrorCaption.textContent = latest.date;
   } else {
     latestEmotion.textContent = currentLang === "zh" ? "中性" : "Neutral";
@@ -923,7 +1042,7 @@ function renderHome() {
     const title = document.createElement("strong");
     title.style.display = "flex";
     title.style.alignItems = "flex-start";
-    title.append(dot, entry.label || "中性");
+    title.append(dot, displayEmotionLabel(entry.label || "中性"));
     const copy = document.createElement("p");
     copy.textContent = entry.text || "";
     const date = document.createElement("small");
@@ -945,7 +1064,7 @@ async function saveCurrentEntry() {
   const original = detectedOverallMapping || mapping;
   const localEntry = {
     text,
-    label: selectedLabel || primaryEmotion.textContent,
+    label: selectedLabel || mapping.label || primaryEmotion.textContent,
     valence: mapping.valence,
     arousal: mapping.arousal,
     color: mapping.color,
@@ -1009,7 +1128,7 @@ async function _transcribeJournalWithServer(blob) {
   const fd = new FormData();
   fd.append("file", blob, "audio.webm");
   try {
-    voiceButton.textContent = "识别中…";
+    voiceButton.textContent = uiText("识别中…", "Transcribing...");
     const res = await fetch("/api/transcribe", { method: "POST", body: fd });
     if (!res.ok) throw new Error(await res.text());
     const { text } = await res.json();
@@ -1019,9 +1138,9 @@ async function _transcribeJournalWithServer(blob) {
       scheduleAnalysis();
     }
   } catch (err) {
-    setStatus("识别失败，请重试");
+    setStatus(uiText("识别失败，请重试", "Transcription failed. Try again."));
   } finally {
-    voiceButton.textContent = "开始语音";
+    voiceButton.textContent = t("journal.startVoice");
     voiceMode.classList.remove("is-active");
     typingMode.classList.add("is-active");
     isListening = false;
@@ -1031,15 +1150,15 @@ async function _transcribeJournalWithServer(blob) {
 function setupSpeechRecognition() {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRecognition) {
-    voiceButton.textContent = "开始录音";
-    voiceButton.title = "浏览器不支持实时语音识别，将录音后上传识别";
+    voiceButton.textContent = uiText("开始录音", "Start recording");
+    voiceButton.title = uiText("浏览器不支持实时语音识别，将录音后上传识别", "This browser does not support live speech recognition. Audio will be uploaded after recording.");
     return;
   }
 
   recognition = new SpeechRecognition();
   recognition.continuous = true;
   recognition.interimResults = true;
-  recognition.lang = "zh-CN";
+  recognition.lang = currentLang === "zh" ? "zh-CN" : "en-US";
 
   recognition.onresult = (event) => {
     let finalText = "";
@@ -1054,26 +1173,26 @@ function setupSpeechRecognition() {
       journalText.value += `${spacer}${finalText.trim()}`;
       scheduleAnalysis();
     }
-    setStatus(interimText ? "正在听写…" : "语音已捕获");
+    setStatus(interimText ? uiText("正在听写…", "Listening...") : uiText("语音已捕获", "Voice captured"));
   };
 
   recognition.onend = () => {
     isListening = false;
-    voiceButton.textContent = "开始语音";
+    voiceButton.textContent = t("journal.startVoice");
     typingMode.classList.add("is-active");
     voiceMode.classList.remove("is-active");
   };
 
   recognition.onerror = (event) => {
     isListening = false;
-    voiceButton.textContent = "开始语音";
+    voiceButton.textContent = t("journal.startVoice");
     const msgs = {
-      "not-allowed": "请在浏览器中允许麦克风权限，然后重试",
-      "network": "语音识别需要网络连接（使用 Google 服务），请检查网络",
-      "no-speech": "没有检测到语音，请靠近麦克风重试",
-      "audio-capture": "麦克风不可用，请检查设备",
+      "not-allowed": uiText("请在浏览器中允许麦克风权限，然后重试", "Allow microphone access in your browser, then try again."),
+      "network": uiText("语音识别需要网络连接（使用 Google 服务），请检查网络", "Speech recognition needs a network connection. Check your connection."),
+      "no-speech": uiText("没有检测到语音，请靠近麦克风重试", "No speech detected. Move closer to the microphone and try again."),
+      "audio-capture": uiText("麦克风不可用，请检查设备", "Microphone unavailable. Check your device."),
     };
-    setStatus(msgs[event.error] || "语音识别出错，请重试");
+    setStatus(msgs[event.error] || uiText("语音识别出错，请重试", "Speech recognition failed. Try again."));
   };
 }
 
@@ -1087,15 +1206,15 @@ function toggleVoice() {
   // Prefer Web Speech API
   if (recognition) {
     isListening = true;
-    voiceButton.textContent = "停止语音";
+    voiceButton.textContent = uiText("停止语音", "Stop voice");
     typingMode.classList.remove("is-active");
     voiceMode.classList.add("is-active");
     try {
       recognition.start();
     } catch (error) {
       isListening = false;
-      voiceButton.textContent = "开始语音";
-      setStatus("语音启动失败，请重试");
+      voiceButton.textContent = t("journal.startVoice");
+      setStatus(uiText("语音启动失败，请重试", "Voice start failed. Try again."));
     }
     return;
   }
@@ -1104,7 +1223,7 @@ function toggleVoice() {
   navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
     isListening = true;
     mediaChunks = [];
-    voiceButton.textContent = "停止录音";
+    voiceButton.textContent = uiText("停止录音", "Stop recording");
     typingMode.classList.remove("is-active");
     voiceMode.classList.add("is-active");
     mediaRecorder = new MediaRecorder(stream);
@@ -1116,7 +1235,7 @@ function toggleVoice() {
     };
     mediaRecorder.start();
   }).catch(() => {
-    setStatus("麦克风权限被拒绝，请在浏览器设置中允许");
+    setStatus(uiText("麦克风权限被拒绝，请在浏览器设置中允许", "Microphone permission was denied. Allow it in browser settings."));
   });
 }
 
@@ -1279,6 +1398,7 @@ const I18N = {
     "body.journalRef": "当前日记参考", "body.journalRefPlaceholder": "填写当前的日记内容（可选）",
     "body.selectRegion": "选择部位", "body.selectSymptom": "选择感受",
     "body.details": "详细信息", "body.severity": "程度", "body.duration": "持续时间",
+    "body.durationDefault": "下午开始",
     "body.addPair": "加入组合", "body.clearPairs": "清空",
     "body.describe": "补充描述", "body.describePlaceholder": "今天喝水较少，坐着学习了很久…",
     "body.generate": "生成身体感受建议", "body.statusHint": "系统会综合身体感受和最近日记。",
@@ -1303,14 +1423,14 @@ const I18N = {
     "home.stat.entries": "Entries", "home.stat.localOnly": "local only", "home.stat.latest": "Latest label",
     "home.stat.waiting": "waiting for text", "home.stat.intensity": "Mirror intensity", "home.stat.intensityHint": "adjustable in journal",
     "home.recent.eyebrow": "Newest first", "home.recent.title": "Emotion Journal", "home.recent.clear": "Clear local entries",
-    "journal.eyebrow": "Expressive writing", "journal.title": "Today's entry", "journal.ready": "Ready",
+    "journal.eyebrow": "Expressive writing", "journal.title": "Journal", "journal.ready": "Ready",
     "journal.modeType": "Type", "journal.modeVoice": "Voice to text",
     "journal.placeholder": "Write what happened. Be specific, vague, contradictory, or unsure.",
     "journal.intensity": "Feedback intensity", "journal.startVoice": "Start voice", "journal.save": "Save entry",
     "journal.mirror.eyebrow": "Kinetic affective type", "journal.mirror.title": "Live mirror",
-    "journal.detected": "Detected", "journal.customLabel": "Custom label",
+    "journal.detected": "Detected emotion", "journal.customLabel": "Custom label",
     "journal.customPlaceholder": "Type a closer emotion word", "journal.apply": "Apply",
-    "journal.va": "V-A Coordinate",
+    "journal.va": "V-A Coordinates",
     "va.positive": "Positive", "va.negative": "Negative", "va.high": "High energy", "va.low": "Low energy",
     "body.eyebrow": "Emotion & Body", "body.title": "Body Sensation",
     "body.subtitle": "Select body regions and symptoms. The system combines body cues with recent journals.",
@@ -1319,6 +1439,7 @@ const I18N = {
     "body.journalRef": "Journal reference", "body.journalRefPlaceholder": "Paste today's journal (optional)",
     "body.selectRegion": "Select region", "body.selectSymptom": "Select symptom",
     "body.details": "Details", "body.severity": "Severity", "body.duration": "Duration",
+    "body.durationDefault": "Started this afternoon",
     "body.addPair": "Add pair", "body.clearPairs": "Clear",
     "body.describe": "Describe more", "body.describePlaceholder": "Less water today, studied for hours…",
     "body.generate": "Generate advice", "body.statusHint": "System combines body cues and recent journals.",
@@ -1347,6 +1468,13 @@ function applyI18n() {
     const key = el.dataset.i18nPlaceholder;
     el.placeholder = t(key);
   });
+  document.querySelectorAll("[data-i18n-value]").forEach((el) => {
+    const key = el.dataset.i18nValue;
+    el.value = t(key);
+  });
+  if (primaryEmotion && (!selectedLabel || currentLang === "en")) {
+    primaryEmotion.textContent = displayEmotionLabel(selectedLabel || primaryEmotion.textContent);
+  }
 }
 
 function initI18n() {
@@ -1521,7 +1649,7 @@ function removeBodyPair(i) {
 }
 
 async function clearAllRecords() {
-  if (!confirm("确定要清除所有记录吗？此操作不可撤销。")) return;
+  if (!confirm(uiText("确定要清除所有记录吗？此操作不可撤销。", "Clear all records? This cannot be undone."))) return;
   const code = (participant?.participant_code || "local").trim() || "local";
   try {
     await fetch(`/participants/${encodeURIComponent(code)}/all-data`, { method: "DELETE" });
@@ -1692,7 +1820,7 @@ function renderEmotionChart() {
   emotionChartInst = new Chart(canvas, {
     type: "bar",
     data: {
-      labels: sorted.map(([l]) => l),
+      labels: sorted.map(([l]) => displayEmotionLabel(l)),
       datasets: [{
         data: sorted.map(([, c]) => c),
         backgroundColor: COLORS.slice(0, sorted.length),
@@ -1735,7 +1863,7 @@ function renderVAChart() {
     data: {
       datasets: [{
         label: currentLang === "zh" ? "情绪坐标" : "Emotion points",
-        data: valid.map((e) => ({ x: e.valence || 0, y: e.arousal || 0, label: e.label })),
+        data: valid.map((e) => ({ x: e.valence || 0, y: e.arousal || 0, label: displayEmotionLabel(e.label) })),
         backgroundColor: valid.map((e) => e.color || "#F59E0B"),
         pointRadius: 7,
         pointHoverRadius: 10,
@@ -1773,7 +1901,7 @@ function renderDataSummary() {
     `${currentLang === "zh" ? "平均效价" : "Avg Valence"}: <b>${avgV.toFixed(2)}</b>`,
     `${currentLang === "zh" ? "平均唤醒度" : "Avg Arousal"}: <b>${avgA.toFixed(2)}</b>`,
     `${currentLang === "zh" ? "最常见情绪" : "Top emotions"}:`,
-    ...top.map(([l, c]) => `&nbsp;&nbsp;${l} × ${c}`),
+    ...top.map(([l, c]) => `&nbsp;&nbsp;${displayEmotionLabel(l)} × ${c}`),
   ].join("<br>");
 }
 
