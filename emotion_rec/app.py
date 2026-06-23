@@ -447,6 +447,8 @@ def healthz():
         "status": "ok",
         "device": str(device),
         "model_loaded": processor is not None and model is not None,
+        "llm_configured": llm_client.llm_enabled(),
+        "llm_model": llm_client.default_model(),
     }
 
 
@@ -2503,14 +2505,18 @@ async def emo_echo_chat(
 
     # call LLM
     reply = None
-    try:
-        reply = llm_client.chat(messages, temperature=0.72, max_tokens=512)
-        if reply:
-            reply = llm_client.strip_content(reply)
-    except Exception as e:
-        print(f"[emo_echo] llm error: {e}")
+    if not llm_client.llm_enabled():
+        print("[emo_echo] LLM unavailable: DEEPSEEK_API_KEY is missing or LLM_ENABLED is disabled.")
+    else:
+        try:
+            reply = llm_client.chat(messages, temperature=0.72, max_tokens=512)
+            if reply:
+                reply = llm_client.strip_content(reply)
+        except Exception as e:
+            print(f"[emo_echo] llm error: {e}")
 
     if not reply:
+        print(f"[emo_echo] using fallback reply; model={llm_client.default_model()}")
         reply = "嗯，我在这里。你说的，我都在认真听。可以多讲一点吗？"
 
     # persist messages

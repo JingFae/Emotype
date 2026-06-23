@@ -1,0 +1,235 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1050" viewBox="0 0 1600 1050" role="img" aria-labelledby="title desc">
+  <title id="title">EmoBridge 产品价值 Overview</title>
+  <desc id="desc">展示 EmoBridge 面向情绪辨识与表达困难用户，从表达、感知、校准、记录到回顾的产品价值闭环。</desc>
+
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FCFCFF"/>
+      <stop offset="0.5" stop-color="#FFF8FB"/>
+      <stop offset="1" stop-color="#F5FCF9"/>
+    </linearGradient>
+    <linearGradient id="hero" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#536FD0"/>
+      <stop offset="0.48" stop-color="#8064C5"/>
+      <stop offset="1" stop-color="#C06C98"/>
+    </linearGradient>
+    <linearGradient id="journey" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#DDE8FF"/>
+      <stop offset="0.34" stop-color="#E8E0FF"/>
+      <stop offset="0.68" stop-color="#F8DDE9"/>
+      <stop offset="1" stop-color="#DDF2E9"/>
+    </linearGradient>
+    <filter id="shadow" x="-25%" y="-25%" width="150%" height="160%">
+      <feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#59647B" flood-opacity="0.13"/>
+    </filter>
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="5" stdDeviation="8" flood-color="#647087" flood-opacity="0.1"/>
+    </filter>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#8067BE"/>
+    </marker>
+    <marker id="arrowGreen" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#458E77"/>
+    </marker>
+    <style>
+      .font { font-family: "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans SC", Inter, Arial, sans-serif; }
+      .title { font-size: 38px; font-weight: 700; fill: #28344B; }
+      .subtitle { font-size: 17px; font-weight: 450; fill: #737D91; }
+      .panel-kicker { font-size: 14px; font-weight: 700; letter-spacing: 1.1px; }
+      .panel-title { font-size: 24px; font-weight: 700; fill: #2C3850; }
+      .card-title { font-size: 18px; font-weight: 700; fill: #303D55; }
+      .card-text { font-size: 14px; font-weight: 500; fill: #68748A; }
+      .small { font-size: 13px; font-weight: 500; fill: #68748A; }
+      .chip { font-size: 14px; font-weight: 650; fill: #354158; }
+      .journey-step { font-size: 15px; font-weight: 700; fill: #344158; }
+    </style>
+  </defs>
+
+  <rect width="1600" height="1050" fill="url(#bg)"/>
+  <circle cx="1520" cy="90" r="180" fill="#E8E1FF" opacity="0.45"/>
+  <circle cx="85" cy="950" r="220" fill="#DFF4EB" opacity="0.42"/>
+  <path d="M 0 210 C 310 115, 500 275, 810 180 C 1100 92, 1280 242, 1600 145 L 1600 0 L 0 0 Z" fill="#EEF3FF" opacity="0.48"/>
+
+  <g class="font">
+    <rect x="52" y="42" width="10" height="72" rx="5" fill="url(#hero)"/>
+    <text x="82" y="76" class="title">EmoBridge</text>
+    <text x="296" y="76" class="title">产品价值</text>
+    <text x="458" y="76" class="title">Overview</text>
+    <text x="82" y="107" class="subtitle">从“记录发生了什么”走向“看见、命名并表达我如何感受”</text>
+
+    <!-- Left: audience and pain -->
+    <g filter="url(#shadow)">
+      <rect x="60" y="160" width="340" height="620" rx="30" fill="#FFFFFF" stroke="#DDE4F1" stroke-width="1.6"/>
+    </g>
+    <text x="92" y="202" class="panel-kicker" fill="#5570C5">用户与问题</text>
+    <text x="92" y="239" class="panel-title">谁需要 EmoBridge？</text>
+
+    <g>
+      <rect x="92" y="267" width="276" height="52" rx="16" fill="#EEF3FF"/>
+      <circle cx="116" cy="293" r="9" fill="#5A76CA"/>
+      <text x="137" y="299" class="chip">情绪难以命名的人</text>
+
+      <rect x="92" y="331" width="276" height="52" rx="16" fill="#F2EEFF"/>
+      <circle cx="116" cy="357" r="9" fill="#8064BF"/>
+      <text x="137" y="363" class="chip">情绪表达困难的人</text>
+
+      <rect x="92" y="395" width="276" height="52" rx="16" fill="#FFF1F6"/>
+      <circle cx="116" cy="421" r="9" fill="#C56F96"/>
+      <text x="137" y="427" class="chip">持续自我记录者</text>
+
+      <rect x="92" y="459" width="276" height="52" rx="16" fill="#EEF9F5"/>
+      <circle cx="116" cy="485" r="9" fill="#48957B"/>
+      <text x="137" y="491" class="chip">情感计算 / HCI 研究者</text>
+    </g>
+
+    <line x1="92" y1="540" x2="368" y2="540" stroke="#E3E7EF" stroke-width="1.5"/>
+    <text x="92" y="577" class="panel-kicker" fill="#B56688">核心痛点</text>
+
+    <g>
+      <circle cx="104" cy="611" r="4.5" fill="#C17494"/>
+      <text x="120" y="616" class="card-text">听见内容，却读不到情绪</text>
+      <circle cx="104" cy="650" r="4.5" fill="#C17494"/>
+      <text x="120" y="655" class="card-text">感到不适，却难以表达</text>
+      <circle cx="104" cy="689" r="4.5" fill="#C17494"/>
+      <text x="120" y="694" class="card-text">单次识别，缺少长期脉络</text>
+      <circle cx="104" cy="728" r="4.5" fill="#C17494"/>
+      <text x="120" y="733" class="card-text">机器判断，缺少自我校准</text>
+    </g>
+
+    <!-- Center: product core -->
+    <path d="M 400 465 L 458 465" fill="none" stroke="#8067BE" stroke-width="3" marker-end="url(#arrow)"/>
+    <text x="429" y="448" text-anchor="middle" class="small">进入</text>
+
+    <g filter="url(#shadow)">
+      <rect x="470" y="230" width="660" height="440" rx="36" fill="#FFFFFF" stroke="#DAD9EC" stroke-width="1.7"/>
+    </g>
+
+    <rect x="565" y="265" width="470" height="112" rx="28" fill="url(#hero)"/>
+    <text x="800" y="307" text-anchor="middle" font-size="30" font-weight="780" fill="#FFFFFF">EmoBridge</text>
+    <text x="800" y="342" text-anchor="middle" font-size="18" font-weight="600" fill="#F8F7FF">从信息可达到情绪可达</text>
+    <text x="800" y="365" text-anchor="middle" font-size="13" font-weight="500" fill="#EEEAFE">多模态情绪理解与表达辅助系统</text>
+
+    <!-- Four product capability cards -->
+    <g filter="url(#softShadow)">
+      <rect x="505" y="410" width="285" height="105" rx="22" fill="#EEF3FF" stroke="#D1DDF7"/>
+      <rect x="810" y="410" width="285" height="105" rx="22" fill="#F3EEFF" stroke="#DDD4F2"/>
+      <rect x="505" y="535" width="285" height="105" rx="22" fill="#FFF1F6" stroke="#F0D5E0"/>
+      <rect x="810" y="535" width="285" height="105" rx="22" fill="#EEF9F5" stroke="#D1EADF"/>
+    </g>
+
+    <circle cx="538" cy="443" r="15" fill="#5B77CD"/>
+    <text x="538" y="449" text-anchor="middle" font-size="13" font-weight="750" fill="#FFFFFF">1</text>
+    <text x="567" y="449" class="card-title">多模态表达入口</text>
+    <text x="538" y="478" class="card-text">文字 · 语音 · 图片</text>
+    <text x="538" y="500" class="small">身体感受 · 日记与对话</text>
+
+    <circle cx="843" cy="443" r="15" fill="#8266C2"/>
+    <text x="843" y="449" text-anchor="middle" font-size="13" font-weight="750" fill="#FFFFFF">2</text>
+    <text x="872" y="449" class="card-title">情绪理解</text>
+    <text x="843" y="478" class="card-text">情绪词汇 · V-A</text>
+    <text x="843" y="500" class="small">图文情绪对照</text>
+
+    <circle cx="538" cy="568" r="15" fill="#C26E94"/>
+    <text x="538" y="574" text-anchor="middle" font-size="13" font-weight="750" fill="#FFFFFF">3</text>
+    <text x="567" y="574" class="card-title">可感知与可校准</text>
+    <text x="538" y="603" class="card-text">动态字体 · 候选标签</text>
+    <text x="538" y="625" class="small">用户调整 V-A 与最终标签</text>
+
+    <circle cx="843" cy="568" r="15" fill="#49977D"/>
+    <text x="843" y="574" text-anchor="middle" font-size="13" font-weight="750" fill="#FFFFFF">4</text>
+    <text x="872" y="574" class="card-title">持续记录与陪伴</text>
+    <text x="843" y="603" class="card-text">日记 · 复盘 · 历史</text>
+    <text x="843" y="625" class="small">情感回响 · Emo Echo</text>
+
+    <!-- Right: values -->
+    <path d="M 1130 465 L 1188 465" fill="none" stroke="#458E77" stroke-width="3" marker-end="url(#arrowGreen)"/>
+    <text x="1159" y="448" text-anchor="middle" class="small">形成</text>
+
+    <g filter="url(#shadow)">
+      <rect x="1200" y="160" width="340" height="620" rx="30" fill="#FFFFFF" stroke="#DCE8E2" stroke-width="1.6"/>
+    </g>
+    <text x="1232" y="202" class="panel-kicker" fill="#3E8B73">用户价值</text>
+    <text x="1232" y="239" class="panel-title">从感受到理解与表达</text>
+
+    <g>
+      <rect x="1232" y="272" width="276" height="66" rx="18" fill="#EEF3FF"/>
+      <rect x="1248" y="288" width="34" height="34" rx="11" fill="#5A76CA"/>
+      <text x="1265" y="311" text-anchor="middle" font-size="15" font-weight="750" fill="#FFFFFF">01</text>
+      <text x="1295" y="299" class="card-title">看见情绪线索</text>
+      <text x="1295" y="321" class="small">不只保留文字内容</text>
+
+      <rect x="1232" y="351" width="276" height="66" rx="18" fill="#F2EEFF"/>
+      <rect x="1248" y="367" width="34" height="34" rx="11" fill="#8064BF"/>
+      <text x="1265" y="390" text-anchor="middle" font-size="15" font-weight="750" fill="#FFFFFF">02</text>
+      <text x="1295" y="378" class="card-title">获得情绪词汇</text>
+      <text x="1295" y="400" class="small">帮助命名模糊感受</text>
+
+      <rect x="1232" y="430" width="276" height="66" rx="18" fill="#FFF1F6"/>
+      <rect x="1248" y="446" width="34" height="34" rx="11" fill="#C56F96"/>
+      <text x="1265" y="469" text-anchor="middle" font-size="15" font-weight="750" fill="#FFFFFF">03</text>
+      <text x="1295" y="457" class="card-title">表达真实感受</text>
+      <text x="1295" y="479" class="small">保留用户校准结果</text>
+
+      <rect x="1232" y="509" width="276" height="66" rx="18" fill="#EEF9F5"/>
+      <rect x="1248" y="525" width="34" height="34" rx="11" fill="#48957B"/>
+      <text x="1265" y="548" text-anchor="middle" font-size="15" font-weight="750" fill="#FFFFFF">04</text>
+      <text x="1295" y="536" class="card-title">建立连续记录</text>
+      <text x="1295" y="558" class="small">观察变化与个人脉络</text>
+
+      <rect x="1232" y="588" width="276" height="66" rx="18" fill="#FFF8EA"/>
+      <rect x="1248" y="604" width="34" height="34" rx="11" fill="#B98B42"/>
+      <text x="1265" y="627" text-anchor="middle" font-size="15" font-weight="750" fill="#FFFFFF">05</text>
+      <text x="1295" y="615" class="card-title">支持反思与沟通</text>
+      <text x="1295" y="637" class="small">提升情感可达性</text>
+    </g>
+
+    <line x1="1232" y1="686" x2="1508" y2="686" stroke="#E1E8E4" stroke-width="1.5"/>
+    <text x="1232" y="718" class="panel-kicker" fill="#7B8291">产品边界</text>
+    <text x="1232" y="739" font-size="14" font-weight="500" fill="#68748A">非医学诊断</text>
+    <text x="1232" y="765" font-size="14" font-weight="500" fill="#68748A">不替代心理咨询</text>
+
+    <!-- Product positioning ribbon -->
+    <g filter="url(#softShadow)">
+      <rect x="470" y="695" width="660" height="85" rx="24" fill="#FFFFFF" stroke="#E0DCEF"/>
+    </g>
+    <text x="505" y="726" class="panel-kicker" fill="#7560B3">产品定位</text>
+    <text x="505" y="749" font-size="16" font-weight="700" fill="#303D55">情绪感知表达工具 · 情感可达性辅助系统</text>
+    <text x="505" y="773" font-size="14" font-weight="500" fill="#68748A">多模态情绪日记 · HCI / 情感计算研究原型</text>
+
+    <!-- Journey loop -->
+    <text x="70" y="835" class="panel-kicker" fill="#65728A">用户价值闭环</text>
+    <rect x="60" y="856" width="1480" height="142" rx="32" fill="#FFFFFF" stroke="#DFE4ED" stroke-width="1.6" filter="url(#softShadow)"/>
+    <rect x="92" y="886" width="1416" height="80" rx="40" fill="url(#journey)" opacity="0.7"/>
+
+    <g>
+      <circle cx="170" cy="926" r="30" fill="#FFFFFF" stroke="#6982D0" stroke-width="3"/>
+      <text x="170" y="932" text-anchor="middle" class="journey-step">表达</text>
+
+      <path d="M 202 926 L 310 926" stroke="#8067BE" stroke-width="3" marker-end="url(#arrow)"/>
+      <circle cx="350" cy="926" r="30" fill="#FFFFFF" stroke="#7880CD" stroke-width="3"/>
+      <text x="350" y="932" text-anchor="middle" class="journey-step">感知</text>
+
+      <path d="M 382 926 L 490 926" stroke="#8067BE" stroke-width="3" marker-end="url(#arrow)"/>
+      <circle cx="530" cy="926" r="30" fill="#FFFFFF" stroke="#8D72C7" stroke-width="3"/>
+      <text x="530" y="932" text-anchor="middle" class="journey-step">可视化</text>
+
+      <path d="M 562 926 L 670 926" stroke="#8067BE" stroke-width="3" marker-end="url(#arrow)"/>
+      <circle cx="710" cy="926" r="30" fill="#FFFFFF" stroke="#B475A2" stroke-width="3"/>
+      <text x="710" y="932" text-anchor="middle" class="journey-step">校准</text>
+
+      <path d="M 742 926 L 850 926" stroke="#8067BE" stroke-width="3" marker-end="url(#arrow)"/>
+      <circle cx="890" cy="926" r="30" fill="#FFFFFF" stroke="#C27B9C" stroke-width="3"/>
+      <text x="890" y="932" text-anchor="middle" class="journey-step">记录</text>
+
+      <path d="M 922 926 L 1030 926" stroke="#6C9A8B" stroke-width="3" marker-end="url(#arrowGreen)"/>
+      <circle cx="1070" cy="926" r="30" fill="#FFFFFF" stroke="#5B9B84" stroke-width="3"/>
+      <text x="1070" y="932" text-anchor="middle" class="journey-step">回顾</text>
+
+      <path d="M 1102 926 L 1210 926" stroke="#458E77" stroke-width="3" marker-end="url(#arrowGreen)"/>
+      <circle cx="1260" cy="926" r="34" fill="#4B927A"/>
+      <text x="1260" y="932" text-anchor="middle" font-size="15" font-weight="730" fill="#FFFFFF">再表达</text>
+
+      <path d="M 1296 926 C 1370 926, 1410 960, 1410 997 C 1410 1020, 1370 1027, 1310 1027 L 180 1027 C 110 1027, 92 997, 92 958 C 92 934, 112 926, 136 926" fill="none" stroke="#7890C8" stroke-width="2.5" stroke-dasharray="8 7" marker-end="url(#arrow)"/>
+    </g>
+  </g>
+</svg>

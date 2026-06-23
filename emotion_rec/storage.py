@@ -35,7 +35,7 @@ PARTICIPANT_CODE_RE = re.compile(r"^[A-Za-z0-9_-]{2,64}$")
 
 
 def _database_url() -> str:
-    url = os.getenv("DATABASE_URL", DEFAULT_DATABASE_URL).strip()
+    url = os.getenv("DATABASE_URL", "").strip() or DEFAULT_DATABASE_URL
     if url.startswith("postgres://"):
         return url.replace("postgres://", "postgresql+psycopg://", 1)
     if url.startswith("postgresql://") and "+psycopg" not in url:
@@ -200,9 +200,10 @@ class EchoMessage(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: now_utc())
 
 
+DATABASE_URL = _database_url()
 engine = create_engine(
-    _database_url(),
-    connect_args={"check_same_thread": False} if _database_url().startswith("sqlite") else {},
+    DATABASE_URL,
+    connect_args={"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {},
     pool_pre_ping=True,
 )
 SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
