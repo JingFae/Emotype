@@ -13,6 +13,21 @@
       "nav.review": "情绪复盘", "nav.records": "历史记录", "nav.body": "身体感受",
       "nav.data": "数据", "nav.profile": "个人信息", "nav.login": "登录",
       "nav.essay": "情绪随笔", "nav.ecoEcho": "Emo 回响", "nav.historyReview": "历史回顾",
+      "essay.moment": "随手记", "essay.diary": "日记本",
+
+      // Quick journal / live mirror
+      "journal.eyebrow": "表达性写作", "journal.title": "随手记", "journal.ready": "就绪",
+      "journal.modeType": "文字输入", "journal.modeVoice": "语音转文字",
+      "journal.placeholder": "写下发生了什么。可以具体、模糊、矛盾，或者不确定。",
+      "journal.uploadImage": "上传图片", "journal.combinedEmotion": "综合情绪：",
+      "journal.intensity": "镜像反馈强度", "journal.realtimeFeedback": "实时反馈",
+      "journal.llmReady": "LLM 已完成", "journal.startVoice": "开始语音", "journal.save": "保存记录",
+      "journal.mirror.eyebrow": "情绪动态字体", "journal.mirror.title": "实时镜像",
+      "journal.detected": "识别结果", "journal.customLabel": "自定义标签",
+      "journal.customPlaceholder": "输入更贴近的情绪词", "journal.apply": "应用",
+      "journal.va": "V-A 坐标", "journal.vaUser": "你 · 文字/语音", "journal.vaImage": "画面 · 图片",
+      "journal.multimodal": "多模态对照", "journal.userAffect": "文字 / 语音",
+      "journal.contentAffect": "画面 / 图片", "journal.combinedAffect": "综合情绪",
 
       // Emo Echo (chatbox) page
       "echo.eyebrow": "AI 情感伴侣", "echo.title": "Emo 回响",
@@ -152,6 +167,21 @@
       "nav.review": "Review", "nav.records": "Records", "nav.body": "Body Sense",
       "nav.data": "Data", "nav.profile": "Profile", "nav.login": "Login",
       "nav.essay": "Journal", "nav.ecoEcho": "Emo Echo", "nav.historyReview": "History",
+      "essay.moment": "Quick Journal", "essay.diary": "Diary",
+
+      // Quick journal / live mirror
+      "journal.eyebrow": "Expressive writing", "journal.title": "Quick Journal", "journal.ready": "Ready",
+      "journal.modeType": "Type", "journal.modeVoice": "Voice to text",
+      "journal.placeholder": "Write what happened. Be specific, vague, contradictory, or unsure.",
+      "journal.uploadImage": "Upload images", "journal.combinedEmotion": "Combined emotion:",
+      "journal.intensity": "Feedback intensity", "journal.realtimeFeedback": "Real-time Feedback",
+      "journal.llmReady": "LLM ready", "journal.startVoice": "Start voice", "journal.save": "Save entry",
+      "journal.mirror.eyebrow": "Kinetic affective type", "journal.mirror.title": "Live mirror",
+      "journal.detected": "Detected emotion", "journal.customLabel": "Custom label",
+      "journal.customPlaceholder": "Type a closer emotion word", "journal.apply": "Apply",
+      "journal.va": "V-A Coordinates", "journal.vaUser": "You · text/voice", "journal.vaImage": "Image · picture",
+      "journal.multimodal": "Multimodal comparison", "journal.userAffect": "Text / voice",
+      "journal.contentAffect": "Image / picture", "journal.combinedAffect": "Combined emotion",
 
       // Emo Echo (chatbox) page
       "echo.eyebrow": "AI Companion", "echo.title": "Emo Echo",

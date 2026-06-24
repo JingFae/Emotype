@@ -1148,19 +1148,20 @@ function renderHome() {
   if (homeIntensity)   homeIntensity.textContent   = `${intensityRange.value}%`;
   if (entryStorageMode) entryStorageMode.textContent = participantCode() ? `synced as ${participantCode()}` : (currentLang === "zh" ? "仅本地" : "local only");
 
-  if (entries.length) {
+  if (latestEmotion && latestConfidence && entries.length) {
     const latest = entries[0];
     latestEmotion.textContent = displayEmotionLabel(latest.label);
     latestConfidence.textContent = `${latest.confidence}% confidence`;
     if (homeMirrorWord)    homeMirrorWord.textContent    = displayEmotionLabel(latest.label).split("/")[0].trim().toLowerCase();
     if (homeMirrorCaption) homeMirrorCaption.textContent = latest.date;
-  } else {
+  } else if (latestEmotion && latestConfidence) {
     latestEmotion.textContent = currentLang === "zh" ? "中性" : "Neutral";
     latestConfidence.textContent = currentLang === "zh" ? "等待输入" : "waiting for text";
     if (homeMirrorWord)    homeMirrorWord.textContent    = "steady";
     if (homeMirrorCaption) homeMirrorCaption.textContent = "No entry yet today";
   }
 
+  if (!entryList) return;
   entryList.textContent = "";
   if (!entries.length) {
     const empty = document.createElement("p");
@@ -1413,7 +1414,7 @@ function bindEvents() {
 
   journalText.addEventListener("input", scheduleAnalysis);
   intensityRange.addEventListener("input", () => {
-    homeIntensity.textContent = `${intensityRange.value}%`;
+    if (homeIntensity) homeIntensity.textContent = `${intensityRange.value}%`;
     rerenderCurrentTypography();
   });
   if (realtimeFeedbackToggle) {
@@ -1514,6 +1515,7 @@ const I18N = {
     "nav.home": "首页", "nav.journal": "随手记", "nav.diaryBook": "日记本", "nav.review": "情绪复盘", "nav.records": "历史记录", "nav.body": "身体感受", "nav.data": "数据",
     "nav.essay": "情绪随笔", "nav.ecoEcho": "Emo 回响", "nav.historyReview": "历史回顾", "nav.profile": "个人信息", "nav.login": "登录",
     "topbar.local": "本地模式",
+    "essay.moment": "随手记", "essay.diary": "日记本",
     "research.title": "研究模式", "research.code": "实验编号", "research.consent": "同意保存日记和操作日志用于研究分析",
     "research.connect": "进入记录", "research.exportJson": "导出 JSON", "research.exportCsv": "导出 CSV",
     "research.status": "未连接实验编号，本机临时保存。",
@@ -1527,10 +1529,14 @@ const I18N = {
     "journal.modeType": "文字输入", "journal.modeVoice": "语音转文字",
     "journal.placeholder": "写下发生了什么。可以具体、模糊、矛盾，或者不确定。",
     "journal.intensity": "镜像反馈强度", "journal.realtimeFeedback": "实时反馈", "journal.llmReady": "LLM 已完成", "journal.startVoice": "开始语音", "journal.save": "保存记录",
+    "journal.uploadImage": "上传图片", "journal.combinedEmotion": "综合情绪：",
     "journal.mirror.eyebrow": "情绪动态字体", "journal.mirror.title": "实时镜像",
     "journal.detected": "识别结果", "journal.customLabel": "自定义标签",
     "journal.customPlaceholder": "输入更贴近的情绪词", "journal.apply": "应用",
     "journal.va": "V-A 坐标",
+    "journal.vaUser": "你 · 文字/语音", "journal.vaImage": "画面 · 图片",
+    "journal.multimodal": "多模态对照", "journal.userAffect": "文字 / 语音",
+    "journal.contentAffect": "画面 / 图片", "journal.combinedAffect": "综合情绪",
     "va.positive": "积极", "va.negative": "消极", "va.high": "高能量", "va.low": "低能量",
     "body.eyebrow": "情绪与身体", "body.title": "身体感受",
     "body.subtitle": "选择身体不适部位和感受，结合最近日记，生成温和缓解提示。",
@@ -1555,6 +1561,7 @@ const I18N = {
     "nav.home": "Home", "nav.journal": "Journal", "nav.diaryBook": "Diary", "nav.review": "Review", "nav.records": "Records", "nav.body": "Body Sense", "nav.data": "Data",
     "nav.essay": "Journal", "nav.ecoEcho": "Emo Echo", "nav.historyReview": "History", "nav.profile": "Profile", "nav.login": "Login",
     "topbar.local": "Local mode",
+    "essay.moment": "Quick Journal", "essay.diary": "Diary",
     "research.title": "Research mode", "research.code": "Participant ID", "research.consent": "I agree to save journals and logs for research",
     "research.connect": "Connect", "research.exportJson": "Export JSON", "research.exportCsv": "Export CSV",
     "research.status": "No participant ID. Saving locally.",
@@ -1568,10 +1575,14 @@ const I18N = {
     "journal.modeType": "Type", "journal.modeVoice": "Voice to text",
     "journal.placeholder": "Write what happened. Be specific, vague, contradictory, or unsure.",
     "journal.intensity": "Feedback intensity", "journal.realtimeFeedback": "Real-time Feedback", "journal.llmReady": "LLM ready", "journal.startVoice": "Start voice", "journal.save": "Save entry",
+    "journal.uploadImage": "Upload images", "journal.combinedEmotion": "Combined emotion:",
     "journal.mirror.eyebrow": "Kinetic affective type", "journal.mirror.title": "Live mirror",
     "journal.detected": "Detected emotion", "journal.customLabel": "Custom label",
     "journal.customPlaceholder": "Type a closer emotion word", "journal.apply": "Apply",
     "journal.va": "V-A Coordinates",
+    "journal.vaUser": "You · text/voice", "journal.vaImage": "Image · picture",
+    "journal.multimodal": "Multimodal comparison", "journal.userAffect": "Text / voice",
+    "journal.contentAffect": "Image / picture", "journal.combinedAffect": "Combined emotion",
     "va.positive": "Positive", "va.negative": "Negative", "va.high": "High energy", "va.low": "Low energy",
     "body.eyebrow": "Emotion & Body", "body.title": "Body Sensation",
     "body.subtitle": "Select body regions and symptoms. The system combines body cues with recent journals.",

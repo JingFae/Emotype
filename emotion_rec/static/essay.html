@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>情绪随笔 | EmoBridge</title>
-  <link rel="stylesheet" href="/static/styles.css?v=20260607c" />
+  <link rel="stylesheet" href="/static/styles.css?v=20260624b" />
 </head>
 <body>
 
@@ -44,9 +44,9 @@
   </header>
 
   <!-- SUB-TAB NAV -->
-  <div class="sub-tab-bar" role="tablist" aria-label="情绪随笔��栏目">
-    <button class="sub-tab-btn is-active" type="button" data-target="momentView" role="tab" aria-selected="true">随手记</button>
-    <button class="sub-tab-btn"           type="button" data-target="diaryView"  role="tab" aria-selected="false">日记本</button>
+  <div class="sub-tab-bar" role="tablist" aria-label="情绪随笔栏目">
+    <button class="sub-tab-btn is-active" type="button" data-target="momentView" role="tab" aria-selected="true" data-i18n="essay.moment">随手记</button>
+    <button class="sub-tab-btn"           type="button" data-target="diaryView"  role="tab" aria-selected="false" data-i18n="essay.diary">日记本</button>
   </div>
 
   <!-- ===== 随手记 (journal view) ===== -->
@@ -58,43 +58,45 @@
         <section class="editor-pane">
           <div class="section-head">
             <div>
-              <p class="eyebrow">Express</p>
-              <h2 id="journalTitle">随手记</h2>
+              <p class="eyebrow" data-i18n="journal.eyebrow">表达性写作</p>
+              <h2 id="journalTitle" data-i18n="journal.title">随手记</h2>
             </div>
             <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
-              <span class="status-pill" id="analysisStatus">就绪</span>
+              <span class="status-pill" id="analysisStatus" data-i18n="journal.ready">就绪</span>
               <span id="journalDateDisplay" style="font-size:13px;color:var(--muted);font-weight:600;white-space:nowrap;"></span>
             </div>
           </div>
 
           <div class="input-mode-row" role="group">
-            <button class="mode-button is-active" type="button" id="typingMode">文字输入</button>
-            <button class="mode-button" type="button" id="voiceMode">语音转文字</button>
+            <button class="mode-button is-active" type="button" id="typingMode" data-i18n="journal.modeType">文字输入</button>
+            <button class="mode-button" type="button" id="voiceMode" data-i18n="journal.modeVoice">语音转文字</button>
           </div>
 
           <textarea
             id="journalText"
             spellcheck="true"
+            data-i18n-placeholder="journal.placeholder"
             placeholder="写下发生了什么。可以具体、模糊、矛盾，或者不确定。"
           >今天我一直说没事，但开完会之后胸口有点紧。</textarea>
 
           <div class="image-upload-row" id="journalImageRow">
             <input type="file" id="journalImageInput" accept="image/*" multiple style="display:none" />
-            <button class="warm-btn ghost" type="button" id="journalImageBtn" style="font-size:13px;">上传图片</button>
+            <button class="warm-btn ghost" type="button" id="journalImageBtn" style="font-size:13px;" data-i18n="journal.uploadImage">上传图片</button>
             <div class="image-preview-strip" id="journalImagePreview"></div>
           </div>
           <div id="journalCombinedEmotion" style="display:none;align-items:center;gap:6px;margin-top:4px;font-size:13px;color:var(--ink-warm);">
             <span id="journalCombinedDot" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--amber);flex-shrink:0;"></span>
-            <span>综合情绪：</span><strong id="journalCombinedLabel"></strong>
+            <span data-i18n="journal.combinedEmotion">综合情绪：</span><strong id="journalCombinedLabel"></strong>
           </div>
 
           <div class="editor-tools">
             <label class="slider-control" for="intensityRange">
-              <span>镜像反馈强度</span>
+              <span data-i18n="journal.intensity">镜像反馈强度</span>
               <input id="intensityRange" type="range" min="0" max="100" value="80" />
             </label>
-            <button class="warm-btn ghost" type="button" id="voiceButton">开始语音</button>
-            <button class="warm-btn primary" type="button" id="saveEntry">保存记录</button>
+            <button class="feedback-toggle is-active" type="button" id="realtimeFeedbackToggle" aria-pressed="true" data-i18n="journal.realtimeFeedback">实时反馈</button>
+            <button class="warm-btn ghost" type="button" id="voiceButton" data-i18n="journal.startVoice">开始语音</button>
+            <button class="warm-btn primary" type="button" id="saveEntry" data-i18n="journal.save">保存记录</button>
           </div>
         </section>
 
@@ -102,17 +104,23 @@
         <section class="mirror-pane" aria-labelledby="mirrorTitle">
           <div class="section-head">
             <div>
-              <p class="eyebrow">Live Mirror</p>
-              <h2 id="mirrorTitle">实时镜像</h2>
+              <p class="eyebrow" data-i18n="journal.mirror.eyebrow">情绪动态字体</p>
+              <h2 id="mirrorTitle" data-i18n="journal.mirror.title">实时镜像</h2>
             </div>
-            <span class="emotion-dot" id="emotionDot" aria-hidden="true"></span>
+            <div class="mirror-status">
+              <span class="llm-ready-badge" id="llmReadyBadge" aria-live="polite" hidden>
+                <span class="llm-ready-icon" aria-hidden="true"></span>
+                <span data-i18n="journal.llmReady">LLM 已完成</span>
+              </span>
+              <span class="emotion-dot" id="emotionDot" aria-hidden="true"></span>
+            </div>
           </div>
 
           <div class="type-stage" id="typeStage" aria-live="polite"></div>
 
           <div class="emotion-panel">
             <div>
-              <span class="panel-label">识别结果</span>
+              <span class="panel-label" data-i18n="journal.detected">识别结果</span>
               <strong id="primaryEmotion">不明确</strong>
               <p class="coordinate-summary" id="reflectionText"></p>
             </div>
@@ -125,46 +133,47 @@
 
           <div class="label-editor" aria-label="自定义情绪标签">
             <label class="custom-label-control" for="customEmotionLabel">
-              <span>自定义标签</span>
+              <span data-i18n="journal.customLabel">自定义标签</span>
               <input id="customEmotionLabel" type="text"
+                data-i18n-placeholder="journal.customPlaceholder"
                 placeholder="输入更贴近的情绪词"
                 autocomplete="off" />
             </label>
-            <button class="warm-btn ghost" type="button" id="applyCustomLabel">应用</button>
+            <button class="warm-btn ghost" type="button" id="applyCustomLabel" data-i18n="journal.apply">应用</button>
           </div>
 
           <section class="va-control" aria-label="V-A 坐标">
             <div class="va-control-head">
-              <span class="panel-label">V-A 坐标</span>
+              <span class="panel-label" data-i18n="journal.va">V-A 坐标</span>
               <strong id="vaReadout">V +0.00 · A +0.00</strong>
             </div>
             <div class="va-plane" id="vaPlane" role="slider" tabindex="0" aria-label="Valence arousal handle">
               <span class="va-axis va-axis-x"></span>
               <span class="va-axis va-axis-y"></span>
-              <span class="va-axis-label va-positive">积极</span>
-              <span class="va-axis-label va-negative">消极</span>
-              <span class="va-axis-label va-high">高能量</span>
-              <span class="va-axis-label va-low">低能量</span>
+              <span class="va-axis-label va-positive" data-i18n="va.positive">积极</span>
+              <span class="va-axis-label va-negative" data-i18n="va.negative">消极</span>
+              <span class="va-axis-label va-high" data-i18n="va.high">高能量</span>
+              <span class="va-axis-label va-low" data-i18n="va.low">低能量</span>
               <button class="va-handle" id="vaHandle" type="button" aria-label="坐标拖拽手柄"></button>
               <span class="va-image-marker" id="vaImageMarker" hidden aria-hidden="true"></span>
             </div>
             <div class="va-legend" id="vaLegend" hidden>
-              <span class="va-legend-item"><span class="va-legend-dot va-legend-user"></span>你 · 文字/语音</span>
-              <span class="va-legend-item"><span class="va-legend-dot va-legend-content"></span>画面 · 图片</span>
+              <span class="va-legend-item"><span class="va-legend-dot va-legend-user"></span><span data-i18n="journal.vaUser">你 · 文字/语音</span></span>
+              <span class="va-legend-item"><span class="va-legend-dot va-legend-content"></span><span data-i18n="journal.vaImage">画面 · 图片</span></span>
             </div>
           </section>
 
           <!-- Dual-state affect comparison (User Affect vs Content Affect) -->
           <section class="affect-duo" id="affectDuo" aria-label="多模态情绪对照">
             <div class="affect-duo-head">
-              <span class="panel-label">多模态对照</span>
+              <span class="panel-label" data-i18n="journal.multimodal">多模态对照</span>
               <span class="affect-consistency" id="affectConsistency" hidden></span>
             </div>
             <div class="affect-cards">
               <article class="affect-card affect-card--user" id="userAffectCard">
                 <header class="affect-card-head">
                   <span class="affect-dot affect-dot--user" id="userAffectDot"></span>
-                  <span>文字 / 语音</span>
+                  <span data-i18n="journal.userAffect">文字 / 语音</span>
                 </header>
                 <strong class="affect-emotion" id="userAffectEmotion">—</strong>
                 <span class="affect-va" id="userAffectVa">V +0.00 · A +0.00</span>
@@ -172,7 +181,7 @@
               <article class="affect-card affect-card--content" id="contentAffectCard" hidden>
                 <header class="affect-card-head">
                   <span class="affect-dot affect-dot--content" id="contentAffectDot"></span>
-                  <span>画面 / 图片</span>
+                  <span data-i18n="journal.contentAffect">画面 / 图片</span>
                 </header>
                 <strong class="affect-emotion" id="contentAffectEmotion">—</strong>
                 <span class="affect-va" id="contentAffectVa">V +0.00 · A +0.00</span>
@@ -183,7 +192,7 @@
                        style="border-color:rgba(139,92,246,0.30);background:linear-gradient(135deg,#f5f3ff,#ede9fe);">
                 <header class="affect-card-head">
                   <span class="affect-dot" id="combinedAffectDot" style="background:var(--purple);"></span>
-                  <span style="color:var(--purple);font-weight:700;">综合情绪</span>
+                  <span style="color:var(--purple);font-weight:700;" data-i18n="journal.combinedAffect">综合情绪</span>
                 </header>
                 <strong class="affect-emotion" id="combinedAffectEmotion" style="color:var(--purple);">—</strong>
                 <span class="affect-va" id="combinedAffectVa">V +0.00 · A +0.00</span>
@@ -473,8 +482,8 @@ window.EmoAffectDuo = (function () {
 </script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="/static/vaMapper.js?v=20260607a" defer></script>
-<script src="/static/i18n.js?v=20260607a"></script>
-<script src="/static/auth.js?v=20260607a"></script>
-<script src="/static/app.js?v=20260607b" defer></script>
+<script src="/static/i18n.js?v=20260624b"></script>
+<script src="/static/auth.js?v=20260624b"></script>
+<script src="/static/app.js?v=20260624b" defer></script>
 </body>
 </html>
