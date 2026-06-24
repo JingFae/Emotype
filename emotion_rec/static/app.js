@@ -5,6 +5,8 @@ const typeStage = document.querySelector("#typeStage");
 const analysisStatus = document.querySelector("#analysisStatus");
 const intensityRange = document.querySelector("#intensityRange");
 const homeIntensity = document.querySelector("#homeIntensity");
+const realtimeFeedbackToggle = document.querySelector("#realtimeFeedbackToggle");
+const llmReadyBadge = document.querySelector("#llmReadyBadge");
 const primaryEmotion = document.querySelector("#primaryEmotion");
 const reflectionText = document.querySelector("#reflectionText");
 const confidenceMeter = document.querySelector("#confidenceMeter");
@@ -172,6 +174,11 @@ let participant = JSON.parse(localStorage.getItem("emomirror.participant") || "n
 let currentAnalysisPayload = {};
 let detectedOverallMapping = null;
 let currentVAMapping = null;
+let realtimeFeedbackEnabled = localStorage.getItem("emomirror.realtimeFeedback") !== "false";
+let activeAnalysisController = null;
+let analysisSequence = 0;
+let inflightAnalysisKey = "";
+const analysisCache = new Map();
 
 function vaMapper() {
   return window.VAMapper;
@@ -411,7 +418,7 @@ function getIntensity() {
 }
 
 function animationClass(name) {
-  if (!name || getIntensity() < 0.25) return "";
+  if (!name || getIntensity() < 0.05) return "";
   return `anim-${String(name).replace(/[^a-z0-9-]/gi, "").toLowerCase()}`;
 }
 
@@ -421,10 +428,51 @@ function applyIntensity(style = {}) {
   if (next.scale) {
     next.scale = 1 + (Number(next.scale) - 1) * intensity;
   }
-  if (intensity < 0.35) {
+  if (next.weight) {
+    next.weight = Math.round(560 + (Number(next.weight) - 560) * intensity);
+  }
+  if (intensity < 0.05) {
     delete next.animation;
   }
   return next;
+}
+
+function applyMotionIntensity() {
+  if (!typeStage) return;
+  const intensity = getIntensity();
+  typeStage.style.setProperty("--motion-intensity", intensity.toFixed(2));
+  typeStage.style.setProperty("--pulse-lift", `${(-4 * intensity).toFixed(2)}px`);
+  typeStage.style.setProperty("--pulse-scale", (1 + 0.06 * intensity).toFixed(3));
+  typeStage.style.setProperty("--shake-x-neg", `${(-1 * intensity).toFixed(2)}px`);
+  typeStage.style.setProperty("--shake-x-pos", `${(2 * intensity).toFixed(2)}px`);
+  typeStage.style.setProperty("--shake-y-pos", `${(1 * intensity).toFixed(2)}px`);
+  typeStage.style.setProperty("--shake-y-neg", `${(-1 * intensity).toFixed(2)}px`);
+  typeStage.style.setProperty("--shake-rot-neg", `${(-1.5 * intensity).toFixed(2)}deg`);
+  typeStage.style.setProperty("--shake-rot-pos", `${(1.5 * intensity).toFixed(2)}deg`);
+  typeStage.style.setProperty("--shake-rot-soft", `${(-1 * intensity).toFixed(2)}deg`);
+  typeStage.style.setProperty("--droop-y", `${(6 * intensity).toFixed(2)}px`);
+  typeStage.style.setProperty("--droop-opacity", (0.92 - 0.24 * intensity).toFixed(2));
+  typeStage.style.setProperty("--float-x", `${(3 * intensity).toFixed(2)}px`);
+  typeStage.style.setProperty("--float-y", `${(-7 * intensity).toFixed(2)}px`);
+}
+
+function analysisKeyFor(text) {
+  return String(text || "");
+}
+
+function setLlmReady(isReady) {
+  if (!llmReadyBadge) return;
+  llmReadyBadge.hidden = !isReady;
+  llmReadyBadge.classList.toggle("is-visible", isReady);
+}
+
+function syncRealtimeFeedbackToggle() {
+  if (!realtimeFeedbackToggle) return;
+  realtimeFeedbackToggle.classList.toggle("is-active", realtimeFeedbackEnabled);
+  realtimeFeedbackToggle.setAttribute("aria-pressed", String(realtimeFeedbackEnabled));
+  realtimeFeedbackToggle.title = realtimeFeedbackEnabled
+    ? uiText("实时反馈已开启：等待 LLM 时先显示本地动态反馈", "Real-time feedback on: local motion is shown while LLM finishes")
+    : uiText("实时反馈已关闭：仅显示 LLM 渲染结果", "Real-time feedback off: only LLM rendering is shown");
 }
 
 function hexToRgba(hex, alpha) {
@@ -569,7 +617,7 @@ function createEmojiGlyph(emoji, mapping = {}) {
   span.style.setProperty("--glyph-weight", 620);
   span.style.setProperty("--glyph-color", style.color || "var(--ink)");
   if (style.backgroundColor) {
-    span.style.backgroundColor = hexToRgba(style.backgroundColor, signal.backgroundAlpha ?? 0.1);
+    span.style.backgroundColor = hexToRgba(style.backgroundColor, (signal.backgroundAlpha ?? 0.1) * (0.35 + 0.65 * getIntensity()));
   }
   return span;
 }
@@ -583,6 +631,7 @@ function addStyleRange(design, start, length, style, onlyIfEmpty = false) {
 }
 
 function renderTypography(text, design = {}, vaMapping = null) {
+  applyMotionIntensity();
   typeStage.textContent = "";
   const fragment = document.createDocumentFragment();
   const emojiInsertions = buildEmojiInsertions(text, vaMapping);
@@ -597,7 +646,7 @@ function renderTypography(text, design = {}, vaMapping = null) {
     span.style.setProperty("--glyph-weight", style.weight || 560);
     span.style.setProperty("--glyph-color", style.color || "var(--ink)");
     if (style.backgroundColor) {
-      span.style.backgroundColor = hexToRgba(style.backgroundColor, 0.14);
+      span.style.backgroundColor = hexToRgba(style.backgroundColor, 0.04 + 0.12 * getIntensity());
       span.style.borderRadius = "0.28em";
     }
     fragment.appendChild(span);
@@ -891,7 +940,7 @@ function normalizeAnalysisPayload(payload) {
   return { emotion, vaMapping, overall };
 }
 
-function applyAnalysis(payload) {
+function applyAnalysis(payload, options = {}) {
   const { emotion, vaMapping, overall } = normalizeAnalysisPayload(payload);
   currentAnalysisPayload = payload;
   detectedOverallMapping = overall;
@@ -911,11 +960,12 @@ function applyAnalysis(payload) {
   const hasRemoteDesign = payload.llm_design && Object.keys(payload.llm_design).length > 0;
   const design = hasRemoteDesign
     ? normalizeDesignColors(payload.llm_design, overall)
-    : localDesign(journalText.value, vaMapping);
+    : (options.allowLocalDesignFallback === false ? {} : localDesign(journalText.value, vaMapping));
   currentDesign = design;
   renderTypography(journalText.value, design, vaMapping);
   renderChips(selectedLabel);
   renderPrompts(emotion.prompts || []);
+  if (options.markComplete) setLlmReady(true);
 }
 
 function renderChips(activeLabel) {
@@ -963,43 +1013,130 @@ function renderPrompts(prompts) {
   });
 }
 
-async function analyzeText() {
+function renderPlainMirror(text = journalText.value) {
+  currentDesign = {};
+  currentVAMapping = null;
+  renderTypography(text, {}, null);
+}
+
+function renderLocalFeedback(text = journalText.value, { updatePanel = true } = {}) {
+  const mapping = localVAMapping(text);
+  const design = localDesign(text, mapping);
+  currentVAMapping = mapping;
+  currentDesign = design;
+  if (updatePanel) {
+    applyAnalysis({
+      emotion: localEmotion(text, mapping),
+      va_mapping: mapping,
+      llm_design: design,
+    });
+  } else {
+    renderTypography(text, design, mapping);
+  }
+}
+
+function rerenderCurrentTypography() {
+  if (currentDesign && Object.keys(currentDesign).length) {
+    renderTypography(journalText.value, currentDesign, currentVAMapping);
+    return;
+  }
+  if (realtimeFeedbackEnabled) {
+    renderLocalFeedback(journalText.value, { updatePanel: false });
+    return;
+  }
+  renderPlainMirror(journalText.value);
+}
+
+async function analyzeText(textSnapshot = journalText.value) {
+  const text = textSnapshot;
+  const key = analysisKeyFor(text);
+  if (!text.trim()) {
+    if (activeAnalysisController) activeAnalysisController.abort();
+    activeAnalysisController = null;
+    inflightAnalysisKey = "";
+    setLlmReady(false);
+    applyAnalysis({ emotion: localEmotion(text), va_mapping: localVAMapping(text), llm_design: {} });
+    setStatus("Ready");
+    return;
+  }
+
+  if (analysisCache.has(key)) {
+    if (analysisKeyFor(journalText.value) !== key) return;
+    applyAnalysis(analysisCache.get(key), { markComplete: true, allowLocalDesignFallback: realtimeFeedbackEnabled });
+    setStatus("Live");
+    return;
+  }
+
+  if (inflightAnalysisKey === key && activeAnalysisController) return;
+
+  if (activeAnalysisController) activeAnalysisController.abort();
+  activeAnalysisController = new AbortController();
+  inflightAnalysisKey = key;
+  const requestId = ++analysisSequence;
+  setLlmReady(false);
+  setStatus(realtimeFeedbackEnabled ? "Mirroring" : uiText("等待 LLM", "Waiting for LLM"));
+
+  try {
+    const response = await fetch("/analyze-text", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, intensity: 1 }),
+      signal: activeAnalysisController.signal,
+    });
+    if (!response.ok) throw new Error("analysis failed");
+    const payload = await response.json();
+    if (requestId !== analysisSequence || analysisKeyFor(journalText.value) !== key) return;
+    analysisCache.set(key, payload);
+    if (analysisCache.size > 24) analysisCache.delete(analysisCache.keys().next().value);
+    applyAnalysis(payload, { markComplete: true, allowLocalDesignFallback: realtimeFeedbackEnabled });
+    setStatus("Live");
+  } catch (error) {
+    if (error.name === "AbortError") return;
+    if (analysisKeyFor(journalText.value) === key) {
+      setStatus(realtimeFeedbackEnabled ? "Local mirror" : uiText("LLM 暂不可用", "LLM unavailable"));
+      setLlmReady(false);
+    }
+  } finally {
+    if (requestId === analysisSequence) {
+      activeAnalysisController = null;
+      inflightAnalysisKey = "";
+    }
+  }
+}
+
+function scheduleAnalysis() {
+  clearTimeout(analyzeTimer);
+  if (activeAnalysisController) {
+    activeAnalysisController.abort();
+    activeAnalysisController = null;
+    inflightAnalysisKey = "";
+  }
+
   const text = journalText.value;
+  const key = analysisKeyFor(text);
+  setLlmReady(false);
+
   if (!text.trim()) {
     applyAnalysis({ emotion: localEmotion(text), va_mapping: localVAMapping(text), llm_design: {} });
     setStatus("Ready");
     return;
   }
 
-  const localMapping = localVAMapping(text);
-  setStatus("Mirroring");
-  applyAnalysis({
-    emotion: localEmotion(text, localMapping),
-    va_mapping: localMapping,
-    llm_design: localDesign(text, localMapping),
-  });
-
-  try {
-    const response = await fetch("/analyze-text", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text, intensity: getIntensity() }),
-    });
-    if (!response.ok) throw new Error("analysis failed");
-    const payload = await response.json();
-    applyAnalysis(payload);
+  if (analysisCache.has(key)) {
+    applyAnalysis(analysisCache.get(key), { markComplete: true, allowLocalDesignFallback: realtimeFeedbackEnabled });
     setStatus("Live");
-  } catch (error) {
-    setStatus("Local mirror");
+    return;
   }
-}
 
-function scheduleAnalysis() {
-  clearTimeout(analyzeTimer);
-  const mapping = localVAMapping(journalText.value);
-  currentVAMapping = mapping;
-  renderTypography(journalText.value, localDesign(journalText.value, mapping), mapping);
-  analyzeTimer = setTimeout(analyzeText, 420);
+  if (realtimeFeedbackEnabled) {
+    renderLocalFeedback(text);
+    setStatus("Mirroring");
+  } else {
+    renderPlainMirror(text);
+    setStatus(uiText("等待 LLM", "Waiting for LLM"));
+  }
+
+  analyzeTimer = setTimeout(() => analyzeText(text), 650);
 }
 
 function saveEntries() {
@@ -1277,14 +1414,16 @@ function bindEvents() {
   journalText.addEventListener("input", scheduleAnalysis);
   intensityRange.addEventListener("input", () => {
     homeIntensity.textContent = `${intensityRange.value}%`;
-    if (currentOverallMapping) {
-      renderTypography(journalText.value, recolorDesign(currentDesign, currentOverallMapping), currentVAMapping);
-    } else {
-      const localMapping = localVAMapping(journalText.value);
-      renderTypography(journalText.value, localDesign(journalText.value, localMapping), localMapping);
-    }
-    scheduleAnalysis();
+    rerenderCurrentTypography();
   });
+  if (realtimeFeedbackToggle) {
+    realtimeFeedbackToggle.addEventListener("click", () => {
+      realtimeFeedbackEnabled = !realtimeFeedbackEnabled;
+      localStorage.setItem("emomirror.realtimeFeedback", String(realtimeFeedbackEnabled));
+      syncRealtimeFeedbackToggle();
+      scheduleAnalysis();
+    });
+  }
   saveEntry.addEventListener("click", saveCurrentEntry);
   applyCustomLabel.addEventListener("click", () => {
     const label = customEmotionLabel.value.trim();
@@ -1350,6 +1489,8 @@ async function boot() {
   if (participant) saveParticipant(participant);
   else saveParticipant(null);
   initI18n();
+  syncRealtimeFeedbackToggle();
+  setLlmReady(false);
   startDateTicker();
   bindEvents();
   setupSpeechRecognition();
@@ -1385,7 +1526,7 @@ const I18N = {
     "journal.eyebrow": "表达性写作", "journal.title": "今天的记录", "journal.ready": "就绪",
     "journal.modeType": "文字输入", "journal.modeVoice": "语音转文字",
     "journal.placeholder": "写下发生了什么。可以具体、模糊、矛盾，或者不确定。",
-    "journal.intensity": "镜像反馈强度", "journal.startVoice": "开始语音", "journal.save": "保存记录",
+    "journal.intensity": "镜像反馈强度", "journal.realtimeFeedback": "实时反馈", "journal.llmReady": "LLM 已完成", "journal.startVoice": "开始语音", "journal.save": "保存记录",
     "journal.mirror.eyebrow": "情绪动态字体", "journal.mirror.title": "实时镜像",
     "journal.detected": "识别结果", "journal.customLabel": "自定义标签",
     "journal.customPlaceholder": "输入更贴近的情绪词", "journal.apply": "应用",
@@ -1426,7 +1567,7 @@ const I18N = {
     "journal.eyebrow": "Expressive writing", "journal.title": "Journal", "journal.ready": "Ready",
     "journal.modeType": "Type", "journal.modeVoice": "Voice to text",
     "journal.placeholder": "Write what happened. Be specific, vague, contradictory, or unsure.",
-    "journal.intensity": "Feedback intensity", "journal.startVoice": "Start voice", "journal.save": "Save entry",
+    "journal.intensity": "Feedback intensity", "journal.realtimeFeedback": "Real-time Feedback", "journal.llmReady": "LLM ready", "journal.startVoice": "Start voice", "journal.save": "Save entry",
     "journal.mirror.eyebrow": "Kinetic affective type", "journal.mirror.title": "Live mirror",
     "journal.detected": "Detected emotion", "journal.customLabel": "Custom label",
     "journal.customPlaceholder": "Type a closer emotion word", "journal.apply": "Apply",
@@ -1475,6 +1616,7 @@ function applyI18n() {
   if (primaryEmotion && (!selectedLabel || currentLang === "en")) {
     primaryEmotion.textContent = displayEmotionLabel(selectedLabel || primaryEmotion.textContent);
   }
+  syncRealtimeFeedbackToggle();
 }
 
 function initI18n() {

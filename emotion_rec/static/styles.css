@@ -618,7 +618,7 @@ textarea:focus {
 /* Editor tools row */
 .editor-tools {
   display: grid;
-  grid-template-columns: 1fr auto auto;
+  grid-template-columns: 1fr auto auto auto;
   align-items: end;
   gap: 10px;
 }
@@ -630,6 +630,41 @@ textarea:focus {
   color: var(--muted);
 }
 .slider-control input[type=range] { accent-color: var(--amber); width: 100%; }
+
+.feedback-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 42px;
+  padding: 0 14px;
+  border: 1.5px solid rgba(100,116,139,0.24);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+  transition: background 160ms, border-color 160ms, color 160ms, box-shadow 160ms;
+}
+.feedback-toggle::before {
+  content: "";
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #94a3b8;
+  box-shadow: 0 0 0 3px rgba(148,163,184,0.15);
+}
+.feedback-toggle.is-active {
+  border-color: rgba(16,185,129,0.36);
+  background: #ecfdf5;
+  color: #047857;
+  box-shadow: 0 6px 18px rgba(16,185,129,0.12);
+}
+.feedback-toggle.is-active::before {
+  background: #10b981;
+  box-shadow: 0 0 0 3px rgba(16,185,129,0.16);
+}
 
 /* Status pill */
 .status-pill {
@@ -659,8 +694,63 @@ textarea:focus {
   transition: background 280ms;
 }
 
+.mirror-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.llm-ready-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 0 10px;
+  border: 1px solid rgba(59,130,246,0.24);
+  border-radius: 999px;
+  background: rgba(239,246,255,0.9);
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+  box-shadow: 0 8px 18px rgba(59,130,246,0.1);
+}
+.llm-ready-badge[hidden] { display: none; }
+.llm-ready-icon {
+  position: relative;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #3b82f6, #10b981);
+  box-shadow: 0 3px 8px rgba(37,99,235,0.2);
+}
+.llm-ready-icon::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 4px;
+  width: 7px;
+  height: 4px;
+  border-left: 2px solid #fff;
+  border-bottom: 2px solid #fff;
+  transform: rotate(-45deg);
+}
+
 /* Type stage */
 .type-stage {
+  --motion-intensity: 0.8;
+  --pulse-lift: -3.2px;
+  --pulse-scale: 1.048;
+  --shake-x-neg: -0.8px;
+  --shake-x-pos: 1.6px;
+  --shake-y-pos: 0.8px;
+  --shake-y-neg: -0.8px;
+  --shake-rot-neg: -1.2deg;
+  --shake-rot-pos: 1.2deg;
+  --shake-rot-soft: -0.8deg;
+  --droop-y: 4.8px;
+  --droop-opacity: 0.73;
+  --float-x: 2.4px;
+  --float-y: -5.6px;
   display: flex;
   flex-wrap: wrap;
   align-content: center;
@@ -1183,21 +1273,21 @@ textarea:focus {
 
 @keyframes pulseScale {
   0%, 100% { transform: translateY(0) scale(1); }
-  50%       { transform: translateY(-4px) scale(1.06); }
+  50%       { transform: translateY(var(--pulse-lift, -4px)) scale(var(--pulse-scale, 1.06)); }
 }
 @keyframes shakeHard {
   0%, 100% { transform: translate(0,0) rotate(0deg); }
-  25%       { transform: translate(-1px,1px) rotate(-1.5deg); }
-  50%       { transform: translate(2px,-1px) rotate(1.5deg); }
-  75%       { transform: translate(-1px,-1px) rotate(-1deg); }
+  25%       { transform: translate(var(--shake-x-neg, -1px), var(--shake-y-pos, 1px)) rotate(var(--shake-rot-neg, -1.5deg)); }
+  50%       { transform: translate(var(--shake-x-pos, 2px), var(--shake-y-neg, -1px)) rotate(var(--shake-rot-pos, 1.5deg)); }
+  75%       { transform: translate(var(--shake-x-neg, -1px), var(--shake-y-neg, -1px)) rotate(var(--shake-rot-soft, -1deg)); }
 }
 @keyframes sadDroop {
   0%, 100% { transform: translateY(0); opacity: 0.92; }
-  50%       { transform: translateY(6px); opacity: 0.68; }
+  50%       { transform: translateY(var(--droop-y, 6px)); opacity: var(--droop-opacity, 0.68); }
 }
 @keyframes floatDrift {
   0%, 100% { transform: translate(0,0); }
-  50%       { transform: translate(3px,-7px); }
+  50%       { transform: translate(var(--float-x, 3px), var(--float-y, -7px)); }
 }
 
 /* ============================================
