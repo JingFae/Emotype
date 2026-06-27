@@ -179,6 +179,7 @@ let activeAnalysisController = null;
 let analysisSequence = 0;
 let inflightAnalysisKey = "";
 const analysisCache = new Map();
+let saveFeedbackTimer = null;
 
 function vaMapper() {
   return window.VAMapper;
@@ -291,6 +292,29 @@ function switchView(targetId) {
 
 function setStatus(text) {
   analysisStatus.textContent = text;
+}
+
+function showSaveFeedback(message, tone = "success") {
+  let feedback = document.getElementById("saveFeedback");
+  if (!feedback) {
+    feedback = document.createElement("div");
+    feedback.id = "saveFeedback";
+    feedback.className = "save-feedback";
+    feedback.setAttribute("role", "status");
+    feedback.setAttribute("aria-live", "polite");
+    feedback.hidden = true;
+    const editorTools = document.querySelector(".editor-tools");
+    if (editorTools) editorTools.insertAdjacentElement("afterend", feedback);
+  }
+  if (!feedback) return;
+  window.clearTimeout(saveFeedbackTimer);
+  feedback.textContent = message;
+  feedback.className = `save-feedback is-visible ${tone ? `is-${tone}` : ""}`;
+  feedback.hidden = false;
+  saveFeedbackTimer = window.setTimeout(() => {
+    feedback.classList.remove("is-visible");
+    feedback.hidden = true;
+  }, 3600);
 }
 
 function participantCode() {
@@ -1194,7 +1218,7 @@ function renderHome() {
 async function saveCurrentEntry() {
   const text = journalText.value.trim();
   if (!text) {
-    setStatus("Nothing to save");
+    setStatus(uiText("没有可保存内容", "Nothing to save"));
     return;
   }
   const confidence = Math.round(Number(confidenceMeter.style.width.replace("%", "")) || 0);
@@ -1245,10 +1269,11 @@ async function saveCurrentEntry() {
     entries = entries.slice(0, 24);
     saveEntries();
     renderHome();
-    setStatus("Saved");
+    setStatus(uiText("保存成功", "Saved"));
+    showSaveFeedback(uiText("保存成功，记录已保存。", "Saved successfully."), "success");
     return;
   } catch (error) {
-    setStatus("Saved locally; sync failed");
+    setStatus(uiText("已保存到本地，云端同步失败", "Saved locally; sync failed"));
     console.error("Save to server failed:", error.message);
   }
 
@@ -1256,7 +1281,8 @@ async function saveCurrentEntry() {
   entries = entries.slice(0, 12);
   saveEntries();
   renderHome();
-  setStatus("Saved locally");
+  setStatus(uiText("已保存到本地", "Saved locally"));
+  showSaveFeedback(uiText("已保存到本地，云端同步稍后可重试。", "Saved locally. Cloud sync can retry later."), "warning");
 }
 
 let mediaRecorder = null;

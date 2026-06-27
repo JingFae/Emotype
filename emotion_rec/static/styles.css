@@ -682,6 +682,54 @@ textarea:focus {
   text-overflow: ellipsis;
 }
 
+.save-feedback {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  min-height: 38px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 800;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: opacity 160ms, transform 160ms;
+}
+.save-feedback[hidden] { display: none; }
+.save-feedback::before {
+  content: "";
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  flex: 0 0 16px;
+}
+.save-feedback.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+.save-feedback.is-success {
+  color: #047857;
+  border: 1px solid rgba(16,185,129,0.28);
+  background: #ecfdf5;
+  box-shadow: 0 8px 18px rgba(16,185,129,0.1);
+}
+.save-feedback.is-success::before {
+  background:
+    linear-gradient(135deg, #10b981, #059669);
+  box-shadow: 0 0 0 3px rgba(16,185,129,0.14);
+}
+.save-feedback.is-warning {
+  color: var(--amber-dark);
+  border: 1px solid rgba(245,158,11,0.28);
+  background: var(--amber-bg);
+  box-shadow: 0 8px 18px rgba(245,158,11,0.1);
+}
+.save-feedback.is-warning::before {
+  background: var(--amber);
+  box-shadow: 0 0 0 3px rgba(245,158,11,0.14);
+}
+
 /* Emotion dot */
 .emotion-dot {
   width: 30px;
