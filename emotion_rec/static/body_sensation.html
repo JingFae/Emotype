@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>身体感受 | EmoBridge</title>
-  <link rel="stylesheet" href="/static/styles.css?v=20260607a" />
+  <link rel="stylesheet" href="/static/styles.css?v=20260626a" />
   <link rel="stylesheet" href="/static/body_sensation.css?v=20260607a" />
 </head>
 <body class="body-sensation-page">
@@ -69,8 +69,8 @@
         <img src="/static/people-body.svg" alt="身体部位示意图" />
       </div>
       <section class="body-selected-panel" aria-labelledby="selectedPairsTitle">
-        <div class="panel-label" id="selectedPairsTitle">已选组合</div>
-        <div class="body-selected-pairs-v2" id="bodySelectedPairs">暂无</div>
+        <div class="panel-label" id="selectedPairsTitle" data-i18n="body.selectedTitle">已选组合</div>
+        <div class="body-selected-pairs-v2" id="bodySelectedPairs" data-i18n="body.noPairs">暂无</div>
       </section>
     </aside>
 
@@ -81,9 +81,9 @@
             <p class="eyebrow" data-i18n="body.contextEyebrow">Context</p>
             <h2 id="bodyInputTitle" data-i18n="body.contextTitle">当前记录参考</h2>
           </div>
-          <span class="body-state-pill" id="bodyContextState">未读取</span>
+          <span class="body-state-pill" id="bodyContextState" data-i18n="body.contextNotLoaded">未读取</span>
         </div>
-        <textarea id="bodyJournalText" placeholder="可以粘贴今天的随手记、正式日记片段，或留空让系统只根据本次身体感受生成建议。"></textarea>
+        <textarea id="bodyJournalText" data-i18n-placeholder="body.contextPh" placeholder="可以粘贴今天的随手记、正式日记片段，或留空让系统只根据本次身体感受生成建议。"></textarea>
         <div class="body-context-list" id="bodyRecentContext"></div>
       </div>
 
@@ -116,19 +116,19 @@
           </label>
           <label class="body-text-control" for="bodyDuration">
             <span data-i18n="body.duration">持续时间</span>
-            <input id="bodyDuration" type="text" value="下午开始" autocomplete="off" />
+            <input id="bodyDuration" type="text" value="下午开始" data-i18n-value="body.durationDefault" autocomplete="off" />
           </label>
         </div>
         <label class="body-text-control body-free-text" for="bodyFreeText">
           <span data-i18n="body.freeText">补充描述</span>
-          <textarea id="bodyFreeText" placeholder="例如：今天喝水较少、久坐、睡眠不足，或某个时段更明显。"></textarea>
+          <textarea id="bodyFreeText" data-i18n-placeholder="body.freeTextPh" placeholder="例如：今天喝水较少、久坐、睡眠不足，或某个时段更明显。"></textarea>
         </label>
         <div class="body-actions">
           <button class="warm-btn ghost" type="button" id="bodyAddPairBtn" data-i18n="body.addPair">加入组合</button>
           <button class="warm-btn ghost" type="button" id="bodyClearPairsBtn" data-i18n="body.clearPairs">清空</button>
           <button class="warm-btn red" type="button" id="bodySubmitBtn" data-i18n="body.generate">生成身体感受建议</button>
         </div>
-        <p class="body-submit-status" id="bodySubmitStatus">系统会综合身体感受和最近记录。</p>
+        <p class="body-submit-status" id="bodySubmitStatus" data-i18n="body.statusHint">系统会综合身体感受和最近记录。</p>
       </div>
     </section>
 
@@ -139,18 +139,18 @@
             <p class="eyebrow" data-i18n="body.adviceEyebrow">Advice</p>
             <h2 id="bodyAdviceTitle" data-i18n="body.adviceTitle">建议</h2>
           </div>
-          <span class="body-state-pill" id="bodyAdviceState">待生成</span>
+          <span class="body-state-pill" id="bodyAdviceState" data-i18n="body.advicePending">待生成</span>
         </div>
         <div class="body-advice-empty" id="bodyAdviceEmpty">
-          <p>选择至少一个身体感受组合后生成建议。建议会保持温和、非诊断式，并保留必要的就医提醒。</p>
+          <p data-i18n="body.adviceEmpty">选择至少一个身体感受组合后生成建议。建议会保持温和、非诊断式，并保留必要的就医提醒。</p>
         </div>
         <div class="body-advice-content" id="bodyAdviceContent"></div>
       </article>
     </aside>
   </section>
 </main>
-<script src="/static/body_sensation.js?v=20260607a" defer></script>
-<script src="/static/i18n.js?v=20260607a"></script>
-<script src="/static/auth.js?v=20260607a"></script>
+<script src="/static/body_sensation.js?v=20260624b" defer></script>
+<script src="/static/i18n.js?v=20260624b"></script>
+<script src="/static/auth.js?v=20260624b"></script>
 </body>
 </html>

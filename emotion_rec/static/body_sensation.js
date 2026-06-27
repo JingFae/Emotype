@@ -75,6 +75,84 @@ const BODY_STRUCTURE = [
   ]},
 ];
 
+const BODY_LABEL_EN = {
+  head: "Head",
+  headache: "Headache",
+  dizziness: "Dizziness",
+  brain_fog: "Brain fog / scattered attention",
+  clear_head: "Clear mind",
+  focused: "Focused",
+  eyes: "Eyes",
+  eye_strain: "Eye strain",
+  dry_eyes: "Dry eyes",
+  blurred_vision: "Blurred vision",
+  bright_eyes: "Bright eyes",
+  throat_mouth: "Mouth / throat",
+  throat_tightness: "Throat tightness / lump sensation",
+  dry_throat: "Dry throat",
+  jaw_tension: "Jaw tension",
+  voice_clear: "Clear voice",
+  chest: "Chest",
+  chest_tightness: "Chest tightness / pressure",
+  palpitation: "Fast heartbeat / palpitation",
+  short_breath: "Shortness of breath",
+  chest_open: "Breathing easily",
+  heart_warm: "Warm-hearted",
+  shoulder_neck: "Shoulders / neck",
+  neck_stiff: "Neck stiffness",
+  shoulder_pain: "Shoulder ache",
+  muscle_tight: "Muscle tension",
+  shoulder_relax: "Relaxed shoulders / neck",
+  stomach: "Stomach",
+  stomach_pain: "Stomach pain / cramps",
+  nausea: "Nausea",
+  appetite_loss: "Loss of appetite",
+  bloating: "Bloating / gas",
+  appetite_good: "Good appetite",
+  stomach_comfy: "Comfortable stomach",
+  back: "Lower back / back",
+  lower_back: "Lower back pain",
+  back_stiff: "Back stiffness",
+  back_relax: "Loose back",
+  hands: "Hands",
+  hand_shaking: "Shaking hands",
+  cold_hands: "Cold hands",
+  sweaty_hands: "Sweaty palms",
+  hands_warm: "Warm hands",
+  legs: "Legs",
+  leg_heavy: "Heavy / weak legs",
+  cold_feet: "Cold feet",
+  restless_legs: "Restless legs",
+  legs_light: "Light steps",
+  whole_body: "Whole body",
+  fatigue: "Fatigue / weakness",
+  insomnia: "Insomnia / poor sleep",
+  sweating: "Sweating / cold sweat",
+  restless: "Restlessness",
+  energized: "Energized",
+  calm_body: "Relaxed body",
+  grounded: "Grounded",
+};
+
+const BODY_EMOTION_LABEL_EN = {
+  "中性": "Neutral",
+  "不明确": "Unclear",
+  "未明确": "Unclear",
+  "不安": "Uneasy",
+  "焦虑": "Anxious",
+  "紧张": "Nervous",
+  "紧绷": "Tense",
+  "开心": "Happy",
+  "兴奋": "Excited",
+  "平静": "Calm",
+  "放松": "Relaxed",
+  "低落": "Low",
+  "悲伤": "Sad",
+  "疲惫": "Tired",
+  "复杂情绪": "Mixed emotions",
+  "身体不适": "Physical discomfort",
+};
+
 const els = {
   refreshContextBtn: document.getElementById("bodyRefreshContextBtn"),
   contextState: document.getElementById("bodyContextState"),
@@ -96,6 +174,42 @@ const els = {
   adviceEmpty: document.getElementById("bodyAdviceEmpty"),
   adviceContent: document.getElementById("bodyAdviceContent"),
 };
+
+function bodyLang() {
+  try {
+    return window.SharedI18N?.lang?.() || localStorage.getItem("emomirror.lang") || "zh";
+  } catch (error) {
+    return "zh";
+  }
+}
+
+function bodyIsEnglish() {
+  return bodyLang() === "en";
+}
+
+function bodyText(zh, en) {
+  return bodyIsEnglish() ? en : zh;
+}
+
+function bodyT(key, fallback) {
+  const value = window.SharedI18N?.t?.(key);
+  return value && value !== key ? value : fallback;
+}
+
+function bodyFormat(key, fallback, values = {}) {
+  return bodyT(key, fallback).replace(/\{(\w+)\}/g, (_, name) => values[name] ?? "");
+}
+
+function bodyLabel(item) {
+  if (!item) return "";
+  return bodyIsEnglish() ? (BODY_LABEL_EN[item.id] || item.label || item.id) : (item.label || item.id);
+}
+
+function bodyEmotionLabel(label) {
+  const text = String(label || "");
+  if (!bodyIsEnglish()) return text;
+  return BODY_EMOTION_LABEL_EN[text.trim()] || text;
+}
 
 const state = {
   selectedRegion: BODY_STRUCTURE[0],
@@ -203,7 +317,7 @@ function chipButton(label, options = {}) {
 function renderRegionChips() {
   els.regionChips.textContent = "";
   BODY_STRUCTURE.forEach((region) => {
-    els.regionChips.appendChild(chipButton(region.label, {
+    els.regionChips.appendChild(chipButton(bodyLabel(region), {
       active: state.selectedRegion.id === region.id,
       onClick: () => {
         state.selectedRegion = region;
@@ -218,7 +332,7 @@ function renderRegionChips() {
 function renderSymptomChips() {
   els.symptomChips.textContent = "";
   state.selectedRegion.symptoms.forEach((symptom) => {
-    els.symptomChips.appendChild(chipButton(symptom.label, {
+    els.symptomChips.appendChild(chipButton(bodyLabel(symptom), {
       active: state.selectedSymptom.id === symptom.id,
       positive: Boolean(symptom.positive),
       onClick: () => {
@@ -230,10 +344,13 @@ function renderSymptomChips() {
 }
 
 function renderPairs() {
-  els.pairCount.textContent = `${state.pairs.length} 组`;
+  const count = state.pairs.length;
+  els.pairCount.textContent = bodyIsEnglish()
+    ? `${count} ${count === 1 ? "pair" : "pairs"}`
+    : `${count} ${bodyT("body.pairUnit", "组")}`;
   els.selectedPairs.textContent = "";
   if (!state.pairs.length) {
-    els.selectedPairs.textContent = "暂无";
+    els.selectedPairs.textContent = bodyT("body.noPairs", bodyText("暂无", "None yet"));
     return;
   }
 
@@ -242,13 +359,13 @@ function renderPairs() {
     row.className = "body-pair-card-v2";
     const body = document.createElement("div");
     const title = document.createElement("strong");
-    title.textContent = `${pair.region.label} → ${pair.symptom.label}`;
+    title.textContent = `${bodyLabel(pair.region)} -> ${bodyLabel(pair.symptom)}`;
     const meta = document.createElement("span");
-    meta.textContent = `程度 ${pair.severity} / 5 · ${pair.duration || "未填写持续时间"}`;
+    meta.textContent = `${bodyT("body.severity", bodyText("程度", "Severity"))} ${pair.severity} / 5 · ${pair.duration || bodyT("body.noDuration", bodyText("未填写持续时间", "No duration entered"))}`;
     body.append(title, meta);
     const remove = document.createElement("button");
     remove.type = "button";
-    remove.textContent = "删除";
+    remove.textContent = bodyT("body.delete", bodyText("删除", "Delete"));
     remove.addEventListener("click", () => {
       state.pairs.splice(index, 1);
       renderPairs();
@@ -294,9 +411,9 @@ function contextText(record) {
 }
 
 function contextLabel(record, index) {
-  const label = record.final_label || record.primary_emotion || record.original_label || record.label || "记录";
+  const label = record.final_label || record.primary_emotion || record.original_label || record.label || bodyT("body.recordFallback", bodyText("记录", "Record"));
   const preview = contextText(record).replace(/\s+/g, " ").slice(0, 26);
-  return `${index + 1}. ${label}${preview ? ` · ${preview}` : ""}`;
+  return `${index + 1}. ${bodyEmotionLabel(label)}${preview ? ` · ${preview}` : ""}`;
 }
 
 async function ensureParticipantSession(code) {
@@ -317,7 +434,7 @@ function renderRecentContext() {
   if (!state.contextRecords.length) {
     const empty = document.createElement("p");
     empty.className = "body-context-empty";
-    empty.textContent = "没有读取到最近随手记。仍然可以只根据本次身体感受生成建议。";
+    empty.textContent = bodyT("body.noRecentContext", bodyText("没有读取到最近随手记。仍然可以只根据本次身体感受生成建议。", "No recent journal entries were loaded. You can still generate advice from this body sensation only."));
     els.recentContext.appendChild(empty);
     return;
   }
@@ -343,15 +460,15 @@ async function loadRecentContext() {
   rememberParticipantCode(code);
   state.loadingContext = true;
   els.refreshContextBtn.disabled = true;
-  setContextState("读取中");
+  setContextState(bodyT("body.loading", bodyText("读取中", "Loading")));
   try {
     await ensureParticipantSession(code);
     const data = await apiJson(`/participants/${encodeURIComponent(code)}/diaries`);
     state.contextRecords = data.diary_entries || data.diaries || data.entries || [];
-    setContextState(`已读取 ${state.contextRecords.length} 条`);
+    setContextState(bodyFormat("body.loadedRecords", bodyText("已读取 {count} 条", "Loaded {count} records"), { count: state.contextRecords.length }));
   } catch (error) {
     state.contextRecords = [];
-    setContextState("读取失败");
+    setContextState(bodyT("body.loadFailed", bodyText("读取失败", "Load failed")));
   } finally {
     state.loadingContext = false;
     els.refreshContextBtn.disabled = false;
@@ -370,7 +487,7 @@ function renderAdvice(data) {
 
   const summary = document.createElement("p");
   summary.className = "body-advice-summary-v2";
-  summary.textContent = advice.summary || "建议已生成。";
+  summary.textContent = advice.summary || bodyT("body.adviceGenerated", bodyText("建议已生成。", "Advice generated."));
   els.adviceContent.append(summary);
 
   if (advice.state_reading) {
@@ -382,21 +499,21 @@ function renderAdvice(data) {
 
   const meta = document.createElement("div");
   meta.className = "body-advice-meta-v2";
-  meta.textContent = `情绪线索：${context.primary_label || "-"} · 来源：${advice.source || "-"}`;
+  meta.textContent = `${bodyT("body.emotionClue", bodyText("情绪线索", "Emotion clue"))}: ${bodyEmotionLabel(context.primary_label) || "-"} · ${bodyT("body.source", bodyText("来源", "Source"))}: ${advice.source || "-"}`;
   els.adviceContent.appendChild(meta);
 
-  appendAdviceList("身体-情绪线索", links.map((item) => `${item.label || item.type || "线索"}：${item.description || ""}`));
-  appendAdviceList("可尝试步骤", advice.steps || [], true);
+  appendAdviceList(bodyT("body.bodyEmotionLinks", bodyText("身体-情绪线索", "Body-emotion links")), links.map((item) => `${item.label || item.type || bodyText("线索", "Clue")}: ${item.description || ""}`));
+  appendAdviceList(bodyT("body.stepsToTry", bodyText("可尝试步骤", "Steps to try")), advice.steps || [], true);
 
   if (advice.reflection_prompt) {
-    appendAdviceParagraph("继续记录提示", advice.reflection_prompt);
+    appendAdviceParagraph(bodyT("body.reflectionPrompt", bodyText("继续记录提示", "Reflection prompt")), advice.reflection_prompt);
   }
 
   if (safety.risk_level === "high" && Array.isArray(safety.red_flags) && safety.red_flags.length) {
-    appendAdviceList("风险提示", safety.red_flags);
+    appendAdviceList(bodyT("body.riskWarning", bodyText("风险提示", "Risk warning")), safety.red_flags);
   }
 
-  appendAdviceParagraph("说明", "这些建议不构成医疗诊断；如果症状明显、持续或让你担心，请优先寻求专业帮助。");
+  appendAdviceParagraph(bodyT("body.note", bodyText("说明", "Note")), bodyT("body.nonMedicalNote", bodyText("这些建议不构成医疗诊断；如果症状明显、持续或让你担心，请优先寻求专业帮助。", "These suggestions are not a medical diagnosis. If symptoms are strong, persistent, or worrying, seek professional help first.")));
 }
 
 function appendAdviceParagraph(label, text) {
@@ -444,22 +561,24 @@ async function submitAdvice() {
 
   state.submitting = true;
   els.submitBtn.disabled = true;
-  setAdviceState("生成中");
-  setSubmitStatus("正在生成建议，可能需要几秒。");
+  els.submitBtn.textContent = bodyT("body.generating", bodyText("生成中", "Generating"));
+  setAdviceState(bodyT("body.generating", bodyText("生成中", "Generating")));
+  setSubmitStatus(bodyT("body.generateWait", bodyText("正在生成建议，可能需要几秒。", "Generating advice. This may take a few seconds.")));
   try {
     const data = await apiJson("/body-sensation/advice", {
       method: "POST",
       body: JSON.stringify(payload),
     });
     renderAdvice(data);
-    setAdviceState("已生成");
-    setSubmitStatus(`建议已生成。来源：${data?.advice?.source || "-"}`);
+    setAdviceState(bodyT("body.generated", bodyText("已生成", "Generated")));
+    setSubmitStatus(bodyFormat("body.generatedStatus", bodyText("建议已生成。来源：{source}", "Advice generated. Source: {source}"), { source: data?.advice?.source || "-" }));
   } catch (error) {
-    setAdviceState("生成失败");
-    setSubmitStatus(`请求失败：${error.message}`);
+    setAdviceState(bodyT("body.generateFailed", bodyText("生成失败", "Failed")));
+    setSubmitStatus(bodyFormat("body.requestFailed", bodyText("请求失败：{message}", "Request failed: {message}"), { message: error.message }));
   } finally {
     state.submitting = false;
     els.submitBtn.disabled = false;
+    els.submitBtn.textContent = bodyT("body.generate", bodyText("生成身体感受建议", "Generate Body Advice"));
   }
 }
 

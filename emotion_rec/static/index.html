@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>EmoMirror</title>
-  <link rel="stylesheet" href="/static/styles.css?v=20260607a" />
+  <link rel="stylesheet" href="/static/styles.css?v=20260626a" />
 </head>
 <body>
 
@@ -155,6 +155,7 @@
             <span data-i18n="journal.intensity">镜像反馈强度</span>
             <input id="intensityRange" type="range" min="0" max="100" value="80" />
           </label>
+          <button class="feedback-toggle is-active" type="button" id="realtimeFeedbackToggle" aria-pressed="true" data-i18n="journal.realtimeFeedback">实时反馈</button>
           <button class="warm-btn ghost" type="button" id="voiceButton" data-i18n="journal.startVoice">开始语音</button>
           <button class="warm-btn primary" type="button" id="saveEntry" data-i18n="journal.save">保存记录</button>
         </div>
@@ -167,7 +168,13 @@
             <p class="eyebrow" data-i18n="journal.mirror.eyebrow">情绪动态字体</p>
             <h2 id="mirrorTitle" data-i18n="journal.mirror.title">实时镜像</h2>
           </div>
-          <span class="emotion-dot" id="emotionDot" aria-hidden="true"></span>
+          <div class="mirror-status">
+            <span class="llm-ready-badge" id="llmReadyBadge" aria-live="polite" hidden>
+              <span class="llm-ready-icon" aria-hidden="true"></span>
+              <span data-i18n="journal.llmReady">LLM 已完成</span>
+            </span>
+            <span class="emotion-dot" id="emotionDot" aria-hidden="true"></span>
+          </div>
         </div>
 
         <div class="type-stage" id="typeStage" aria-live="polite"></div>
@@ -282,7 +289,7 @@
             </label>
             <label class="slider-control">
               <span data-i18n="body.duration">持续时间</span>
-              <input type="text" id="bodyDuration" value="下午开始"
+              <input type="text" id="bodyDuration" value="下午开始" data-i18n-value="body.durationDefault"
                 style="min-height:36px;border:1.5px dashed rgba(239,68,68,0.3);border-radius:8px;padding:0 10px;background:#fff;outline:none;font-size:13px;" />
             </label>
           </div>
@@ -370,7 +377,7 @@
 <!-- Chart.js via CDN (jsDelivr works in China) -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="/static/vaMapper.js?v=20260607a" defer></script>
-<script src="/static/auth.js?v=20260607a"></script>
-<script src="/static/app.js?v=20260607b" defer></script>
+<script src="/static/auth.js?v=20260624b"></script>
+<script src="/static/app.js?v=20260626a" defer></script>
 </body>
 </html>
