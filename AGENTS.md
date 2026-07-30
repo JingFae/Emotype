@@ -14,7 +14,7 @@ typography design map for frontend rendering.
 
 Text emotion handling is intentionally separated from typography generation:
 
-- `/analyze-text` uses `emotion_rec/text_emotion.py` to estimate segment-level
+- `/analyze-text` uses `emotion_rec/domain/emotion/text.py` to estimate segment-level
   V-A values, explicit/implicit labels, confidence, and evidence. The module can
   load `Johnson8187/Chinese-Emotion-Small` for explicit emotion classification,
   fuse it with deterministic implicit-emotion rules, and later load
@@ -29,16 +29,27 @@ Text emotion handling is intentionally separated from typography generation:
 
 - `emotion_rec/`
   - Main FastAPI service.
-  - `app.py` exposes `/predict` and returns VAD, acoustic features, and
-    `va_mapping` plus `llm_design`.
-  - `va_mapper.py` maps already inferred valence/arousal values to colors,
+  - `app.py` is the stable ASGI compatibility entry point. The application is
+    assembled in `api/application.py`, request contracts live in
+    `api/schemas.py`, and HTML routes live in `api/routes/pages.py`.
+  - `api/application.py` exposes `/predict` and returns VAD, acoustic features,
+    `va_mapping`, and `llm_design`.
+  - `domain/emotion/mapping.py` maps already inferred valence/arousal values to colors,
     nearest labels, quadrants, confidence, and segment summaries. It must not
     call ASR, LLMs, or emotion inference models.
-  - `text_emotion.py` owns text semantic emotion inference. It returns
+  - `domain/emotion/text.py` owns text semantic emotion inference. It returns
     `text_emotion.segments` with `text`, `valence`, `arousal`, `confidence`,
     `explicit_label`, `implicit_label`, `evidence`, and `source`.
     Default `auto` mode tries a trained regression head first, then
     `Johnson8187/Chinese-Emotion-Small`, and finally deterministic rules.
+  - `services/audio_emotion.py` owns local Wav2Vec2 loading, audio conversion,
+    raw VAD inference, and acoustic feature extraction.
+  - `services/body_sensation.py` owns body-sensation advice coordination.
+  - `integrations/llm.py` and `integrations/vision.py` isolate external AI SDKs.
+  - `persistence/repository.py` owns SQLAlchemy models, queries, exports, and
+    compatibility schema updates.
+  - Old top-level module paths remain thin compatibility re-exports. Use the
+    canonical layered paths in new code.
   - `shared/emotion_lexicon.json` contains the canonical 80-label V-A lexicon
     used by both backend and frontend fallbacks.
   - `static/` contains the production web UI served from `/`.
@@ -151,9 +162,9 @@ Current text emotion logic:
 
 Recommended semantic V-A upgrade path:
 
-1. Keep `va_mapper.py` as the stable mapping layer and do not put model
+1. Keep `domain/emotion/mapping.py` as the stable mapping layer and do not put model
    inference inside it.
-2. Keep `text_emotion.py` as the semantic inference module that accepts text
+2. Keep `domain/emotion/text.py` as the semantic inference module that accepts text
    segments and returns `{valence, arousal, confidence, explicit_label,
    implicit_label, evidence}` for each segment.
 3. For lightweight deployment, prefer a multilingual or Chinese-capable
@@ -195,7 +206,8 @@ Recommended semantic V-A upgrade path:
 
 - Some source comments appear mojibake/encoding-corrupted. Do not mechanically
   rewrite all comments while making unrelated changes.
-- `emotion_rec/app.py` currently contains LLM integration logic. Prefer reading
+- `emotion_rec/api/application.py` still contains typography and reflection
+  orchestration; provider calls themselves belong in `integrations/`. Prefer reading
   secrets from environment variables before production use.
 - Runtime artifacts such as `__pycache__/`, `uvicorn.*.log`, certificates, and
   private keys should not be treated as source changes.

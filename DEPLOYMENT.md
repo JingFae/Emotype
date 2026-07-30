@@ -62,7 +62,8 @@ curl -I http://127.0.0.1:8000/history
 
 ## 环境变量
 
-生成式模型调用统一走 `emotion_rec/llm_client.py`。
+生成式模型调用统一走 `emotion_rec/integrations/llm.py`；
+`emotion_rec/llm_client.py` 仅保留为旧导入路径的兼容层。
 
 ```bash
 export DEEPSEEK_API_KEY=your_deepseek_api_key_here

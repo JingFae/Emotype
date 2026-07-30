@@ -1,5 +1,18 @@
 # EmoBridge
 
+## 工程结构导航
+
+主服务已按职责整理为 `api / core / domain / integrations / persistence /
+services / tools` 七层。部署入口仍是 `emotion_rec.app:app`，现有 HTTP API、
+`/static/*` 地址和本地数据库位置均保持兼容。
+
+- 完整模块职责与接口表：[`docs/architecture/EMOTION_REC_STRUCTURE.md`](docs/architecture/EMOTION_REC_STRUCTURE.md)
+- 静态前端页面依赖表：[`emotion_rec/static/README.md`](emotion_rec/static/README.md)
+- 无第三方依赖的结构契约检查：`python -m emotion_rec.tools.check_contracts`
+
+新代码应优先引用分层后的 canonical 路径；`emotion_rec/storage.py`、
+`emotion_rec/text_emotion.py`、`emotion_rec/va_mapper.py` 等旧路径作为兼容层保留。
+
 > 面向情感可达性与自我反思场景的多模态情绪理解系统：将文字、语音、图片与身体感受转换为可解释的 V-A 情绪坐标、动态字体反馈和连续的日记复盘。
 
 本文档对应 `v2-new` 分支。项目名称已统一为 **EmoBridge**；代码中仍保留少量 `EmoMirror`、`Emotype` 等历史标识和本地存储键，以维持现有数据与前端兼容。
@@ -26,7 +39,7 @@
 - **情绪感知随手记**：`emotion_rec/static/index.html` 与 `emotion_rec/static/app.js` 支持文字输入、浏览器 Web Speech API 听写和 `MediaRecorder → /api/transcribe` 回退。输入会被解析为分段 V-A、情绪候选和置信度，而不仅是保存原文。
 - **动态字体情绪镜像**：`POST /analyze-text` 和 `POST /predict` 返回字符索引到字体样式的 `llm_design`。前端据此改变字重、缩放、颜色、动画和局部 emoji，使情绪线索成为可感知的视觉反馈。
 - **可修正的人机协同标注**：用户可以选择候选情绪、输入自定义标签或拖动 V-A 坐标。系统同时保留原始判断与最终修正值，便于研究用户校准行为。
-- **文本、语音和声学分析**：文本由 `text_emotion.py` 处理；上传音频由本地 Wav2Vec2 回归模型输出 arousal、dominance、valence，并由 `librosa` 提取 pitch 与 energy。
+- **文本、语音和声学分析**：文本由 `domain/emotion/text.py` 处理；上传音频由 `services/audio_emotion.py` 调度本地 Wav2Vec2 回归模型输出 arousal、dominance、valence，并由 `librosa` 提取 pitch 与 energy。
 - **图片情绪理解与融合**：`/essay` 支持图片预览；`POST /api/uploads` 使用 Gemini 分析可见线索、人物表达、画面诱发情绪和 V-A，`POST /api/analyze-combined` 再以文字为主融合图文结果。
 - **正式日记与 AI 复盘**：`/diary` 支持按日期编辑、自动保存、天气隐喻、语音输入和图片分析引用。用户主动触发复盘后，系统生成事件摘要、主/次情绪、身体信号、触发点、需要、反思问题和小行动建议。
 - **身体感受整理**：`/body-sensation` 将身体部位、症状、严重程度、持续时间、当前文本和近期日记放在一起分析。红旗规则优先于 LLM，输出明确声明不构成医疗诊断。
@@ -66,20 +79,20 @@
 emotion_rec/static/
 原生 HTML + CSS + JavaScript
         ↓ HTTP / JSON / multipart
-emotion_rec/app.py
+emotion_rec/app.py → emotion_rec/api/application.py
 FastAPI 页面路由、鉴权、业务编排与 API
         ↓
-├── text_emotion.py
+├── domain/emotion/text.py
 │   DeepSeek → regression head → Chinese-Emotion-Small → rules
-├── Wav2vec-2.0/ + librosa + pydub
+├── services/audio_emotion.py + Wav2vec-2.0/
 │   speech VAD、pitch、energy
-├── gemini_client.py
+├── integrations/vision.py
 │   图片视觉线索与情绪分析
-├── va_mapper.py + shared/emotion_lexicon.json
+├── domain/emotion/mapping.py + shared/emotion_lexicon.json
 │   V-A 标准化、标签、颜色、候选和分段聚合
-├── llm_client.py
+├── integrations/llm.py
 │   动态字体、Diary / Review、Body、Emo 回响
-└── storage.py
+└── persistence/repository.py
     SQLAlchemy + SQLite / PostgreSQL
         ↓
 字符级字体反馈、V-A 图、情绪候选、复盘、历史记录与导出
@@ -97,19 +110,19 @@ FastAPI 页面路由、鉴权、业务编排与 API
 
 - **技术**：FastAPI、Pydantic、SQLAlchemy。
 - **职责**：静态页面服务、JWT 鉴权、参与者隔离、模型调度、数据读写、复盘聚合和导出。
-- **关键文件**：`emotion_rec/app.py`。
+- **关键文件**：`emotion_rec/app.py`（稳定入口）、`emotion_rec/api/application.py`（应用装配）、`emotion_rec/api/schemas.py`（请求契约）。
 - **身份解析**：登录普通用户始终映射到自己的 `username / participant_code`；登录管理员可指定其他参与者；未登录请求仍保留兼容旧版的 `participant_code` 模式。
 
 ### Emotion recognition / model inference layer
 
-- **语音情绪**：本地 `Wav2vec-2.0/` 由 `EmotionModel` 加载，mean pooling 后接回归头，输出顺序为 arousal、dominance、valence。
-- **文本情绪**：`text_emotion.py` 输出每个片段的 valence、arousal、confidence、explicit_label、implicit_label、evidence 和 source。
-- **映射层**：`va_mapper.py` 不执行模型推理，只将已有 V-A 映射为象限、标签、颜色、候选和整体摘要。
-- **图片情绪**：`gemini_client.py` 通过 `google-genai` 分析视觉证据，并区分 expressed_emotion 与 evoked_emotion。
+- **语音情绪**：`services/audio_emotion.py` 加载本地 `Wav2vec-2.0/`，mean pooling 后接回归头，输出顺序为 arousal、dominance、valence。
+- **文本情绪**：`domain/emotion/text.py` 输出每个片段的 valence、arousal、confidence、explicit_label、implicit_label、evidence 和 source。
+- **映射层**：`domain/emotion/mapping.py` 不执行模型推理，只将已有 V-A 映射为象限、标签、颜色、候选和整体摘要。
+- **图片情绪**：`integrations/vision.py` 通过 `google-genai` 分析视觉证据，并区分 expressed_emotion 与 evoked_emotion。
 
 ### LLM generation layer
 
-`emotion_rec/llm_client.py` 使用 OpenAI-compatible SDK 连接 DeepSeek。所有调用都有关闭开关、超时和本地 fallback，主要用于：
+`emotion_rec/integrations/llm.py` 使用 OpenAI-compatible SDK 连接 DeepSeek。旧路径 `emotion_rec/llm_client.py` 继续兼容。所有调用都有关闭开关、超时和本地 fallback，主要用于：
 
 - 文本语义情绪分析；
 - 字符级 kinetic typography 设计；
@@ -121,7 +134,7 @@ FastAPI 页面路由、鉴权、业务编排与 API
 
 ### Database / persistence layer
 
-`emotion_rec/storage.py` 使用 SQLAlchemy。默认数据库为：
+`emotion_rec/persistence/repository.py` 使用 SQLAlchemy，`emotion_rec/storage.py` 保留为兼容入口。默认数据库为：
 
 ```text
 emotion_rec/emomirror_data.sqlite3
@@ -142,7 +155,7 @@ emotion_rec/emomirror_data.sqlite3
 1. 用户在 `/` 或 `/essay` 输入文字。
 2. 浏览器优先使用 Web Speech API 转写语音；不支持时录制 WebM 并调用 `POST /api/transcribe`，由 `openai/whisper-tiny` 转写。
 3. 前端先用 `vaMapper.js` 和本地规则立即渲染低延迟预览，随后以 420 ms debounce 调用 `POST /analyze-text`。
-4. `text_emotion.py` 分段分析显性/隐性情绪；`va_mapper.py` 将片段聚合为 overall V-A、情绪标签、颜色和候选。
+4. `domain/emotion/text.py` 分段分析显性/隐性情绪；`domain/emotion/mapping.py` 将片段聚合为 overall V-A、情绪标签、颜色和候选。
 5. typography pipeline 先检查演示触发规则，再尝试 DeepSeek，失败时生成确定性的字符级样式。
 6. 用户可以修正标签或拖动 V-A 坐标。
 7. `POST /diaries` 保存原始判断、最终判断、候选、text_emotion 和 va_mapping；浏览器同时保留最近记录的 localStorage 副本。
@@ -184,7 +197,7 @@ emotion_rec/emomirror_data.sqlite3
 | `Johnson8187/Chinese-Emotion-Small` | 中文/口语文本 | 显性情绪分类 | 与否定、身体化、关系、羞耻、压力等规则融合 |
 | Deterministic rules | 文本片段 | 隐性标签、V-A、证据 | 无网络、无 key 或模型失败时的稳定 fallback |
 | Gemini VLM | 图片 bytes + context | 视觉证据、图片情绪、V-A、颜色 | 通过 `google-genai`；仅在配置 key 时启用 |
-| DeepSeek generation | 情绪上下文、日记、统计或对话 | typography、复盘、建议、回复 | 统一经 `llm_client.py` 调用 |
+| DeepSeek generation | 情绪上下文、日记、统计或对话 | typography、复盘、建议、回复 | 统一经 `integrations/llm.py` 调用 |
 | `emotion_lexicon.json` | V-A 坐标 | 近邻标签、候选、象限和颜色 | 后端与浏览器共享的 80 标签词典 |
 
 当前仓库提供了 Wav2Vec2 模型配置与权重加载接口，但没有完整公开训练数据、训练过程、评估协议或准确率。`text_emotion_head.pt` 也不是当前仓库中的必备文件；没有训练好的 regression head 时，系统会使用分类器与规则。
@@ -296,22 +309,24 @@ http://127.0.0.1:8000/docs
 ```text
 EmoBridge/
 ├── emotion_rec/
-│   ├── app.py                       # FastAPI、页面路由、鉴权与业务编排
-│   ├── storage.py                   # SQLAlchemy schema、CRUD、统计与导出
-│   ├── text_emotion.py              # 文本显性/隐性情绪推理与 fallback
-│   ├── va_mapper.py                 # V-A 映射、标签、颜色和候选
-│   ├── llm_client.py                # DeepSeek / OpenAI-compatible 统一客户端
-│   ├── gemini_client.py             # Gemini 图片情绪分析
-│   ├── body_sensation.py            # 身体感受、安全规则与建议
+│   ├── app.py                       # 稳定 ASGI 兼容入口
+│   ├── api/                         # FastAPI 装配、请求 schema、页面路由
+│   ├── core/                        # 路径/环境配置与 JWT
+│   ├── domain/emotion/              # 文本情绪推理与纯 V-A 映射
+│   ├── integrations/                # DeepSeek 与 Gemini 外部服务适配
+│   ├── persistence/                 # SQLAlchemy、查询、聚合与导出
+│   ├── services/                    # 音频推理与身体感受编排
+│   ├── tools/                       # GPU、模型与契约诊断工具
 │   ├── shared/
 │   │   └── emotion_lexicon.json     # 后端与前端共享的情绪词典
 │   ├── static/                      # 原生 Web UI、样式、脚本和资源
-│   └── start.sh                     # Unix 启动脚本
+│   ├── start.sh                     # Unix 启动脚本
+│   └── *.py                         # 旧导入路径的薄兼容层
 ├── Wav2vec-2.0/                     # 本地 Wav2Vec2 模型与配置
 ├── emotion_computing/               # 本地模型 demo 和简化 API
 ├── hmotiongpt-api-test/             # 独立上传测试服务
 ├── audio/                           # 手工测试音频
-├── docs/                            # 分析报告与图表
+├── docs/                            # 架构、分析报告与图表
 ├── Idea/                            # 产品、研究与整合方案
 ├── requirements.txt                 # 完整开发依赖
 ├── requirements-web.txt             # Docker Web runtime 依赖
@@ -510,7 +525,7 @@ docker run --rm -p 8000:8000 \
 
 3. **分离情绪推理与视觉映射**
 
-   `text_emotion.py` 负责语义推理，`va_mapper.py` 只负责 V-A 到标签、颜色和候选的稳定映射。这个边界让本地模型、LLM、规则和前端 fallback 可以共享同一输出语义，降低实验替换成本。
+   `domain/emotion/text.py` 负责语义推理，`domain/emotion/mapping.py` 只负责 V-A 到标签、颜色和候选的稳定映射。这个边界让本地模型、LLM、规则和前端 fallback 可以共享同一输出语义，降低实验替换成本。
 
 4. **多模态结果保留来源与不一致性**
 

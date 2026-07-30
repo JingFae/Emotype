@@ -99,7 +99,8 @@ Body 生成的低风险建议会记录到 `usage_events`，Review 和 Records �
 
 ## LLM
 
-生成式模型调用统一走 `emotion_rec/llm_client.py`，通过 OpenAI SDK 调用 DeepSeek。
+生成式模型调用统一走 `emotion_rec/integrations/llm.py`，通过 OpenAI SDK 调用 DeepSeek；
+`emotion_rec/llm_client.py` 仅保留为旧导入路径的兼容层。
 `/analyze-text`、Body 建议、Diary 复盘和 Emotion Review 阶段复盘都应该复用同一个封装。失败或没有 key 时回退本地分类器/规则或本地建议 fallback。
 
 身体感受接口默认启用 DeepSeek，高风险红旗仍会跳过 LLM 并走安全 fallback：
